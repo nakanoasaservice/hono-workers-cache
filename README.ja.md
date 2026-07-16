@@ -1,5 +1,10 @@
 # hono-workers-cache
 
+[![npm version](https://img.shields.io/npm/v/hono-workers-cache?style=flat-square)](https://www.npmjs.com/package/hono-workers-cache)
+[![npm downloads](https://img.shields.io/npm/dm/hono-workers-cache?style=flat-square)](https://www.npmjs.com/package/hono-workers-cache)
+[![CI](https://github.com/nakanoasaservice/hono-workers-cache/actions/workflows/ci.yml/badge.svg)](https://github.com/nakanoasaservice/hono-workers-cache/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/npm/l/hono-workers-cache?style=flat-square)](https://github.com/nakanoasaservice/hono-workers-cache/blob/main/LICENSE)
+
 [Cloudflare Workers Cache](https://developers.cloudflare.com/workers/cache/) を [Hono](https://hono.dev)([HonoX](https://github.com/honojs/honox) でも動作)から宣言的に使うためのミドルウェアと purge ヘルパー。
 
 **Next.js の [Cache Components](https://nextjs.org/docs/app/getting-started/cache-components) のような体験を Hono に**: ルートのフレッシュ期間を宣言し、レンダリング内容にタグを付け、データが変わったら `revalidateTags()` を呼ぶ — 次のリクエストだけが再生成され、それ以外はキャッシュから配信され続けます。違いはキャッシュが Worker の前段、Cloudflare のエッジで行われること。HIT は CPU コストゼロで、あなたのコードは一切実行されません。

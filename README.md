@@ -1,5 +1,10 @@
 # hono-workers-cache
 
+[![npm version](https://img.shields.io/npm/v/hono-workers-cache?style=flat-square)](https://www.npmjs.com/package/hono-workers-cache)
+[![npm downloads](https://img.shields.io/npm/dm/hono-workers-cache?style=flat-square)](https://www.npmjs.com/package/hono-workers-cache)
+[![CI](https://github.com/nakanoasaservice/hono-workers-cache/actions/workflows/ci.yml/badge.svg)](https://github.com/nakanoasaservice/hono-workers-cache/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/npm/l/hono-workers-cache?style=flat-square)](https://github.com/nakanoasaservice/hono-workers-cache/blob/main/LICENSE)
+
 Declarative [Cloudflare Workers Cache](https://developers.cloudflare.com/workers/cache/) middleware and purge helpers for [Hono](https://hono.dev) (works with [HonoX](https://github.com/honojs/honox)).
 
 **A Next.js [Cache Components](https://nextjs.org/docs/app/getting-started/cache-components)-like experience for Hono**: declare how long a route stays fresh, tag what it renders, and call `revalidateTags()` when the data changes — the next request is regenerated, everything else keeps being served from cache. The difference: caching happens at Cloudflare's edge, in front of your Worker, so a cache hit costs zero CPU and your code never even runs.
