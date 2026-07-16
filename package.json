@@ -1,0 +1,67 @@
+{
+  "name": "hono-workers-cache",
+  "version": "0.0.0",
+  "description": "Cloudflare Workers Cache middleware & purge helpers for Hono (works with HonoX)",
+  "type": "module",
+  "license": "MIT",
+  "author": "Nakano as a Service",
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nakanoasaservice/hono-workers-cache.git"
+  },
+  "bugs": "https://github.com/nakanoasaservice/hono-workers-cache/issues",
+  "homepage": "https://github.com/nakanoasaservice/hono-workers-cache#readme",
+  "keywords": [
+    "hono",
+    "honox",
+    "cloudflare",
+    "cloudflare-workers",
+    "workers-cache",
+    "cdn",
+    "cache",
+    "cache-tag",
+    "stale-while-revalidate"
+  ],
+  "sideEffects": false,
+  "exports": {
+    ".": "./dist/index.mjs",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:workerd": "vitest run -c vitest.workerd.config.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "format": "biome format --write .",
+    "changeset": "changeset",
+    "version": "changeset version",
+    "prepublishOnly": "pnpm build"
+  },
+  "peerDependencies": {
+    "hono": ">=4"
+  },
+  "packageManager": "pnpm@10.34.3",
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.4",
+    "@changesets/cli": "^2.31.1",
+    "@cloudflare/vitest-pool-workers": "^0.18.5",
+    "hono": "^4.12.30",
+    "tsdown": "^0.22.8",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10",
+    "wrangler": "^4.111.0"
+  }
+}

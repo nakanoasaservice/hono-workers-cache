@@ -1,0 +1,11 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "hono-workers-cache-honox",
+  "main": "./dist/index.js",
+  "compatibility_date": "2026-07-01",
+  // Enable Workers Cache (requires Wrangler >= 4.69.0). On a HIT the edge
+  // serves the response before this Worker — including HonoX — ever runs.
+  "cache": {
+    "enabled": true
+  }
+}

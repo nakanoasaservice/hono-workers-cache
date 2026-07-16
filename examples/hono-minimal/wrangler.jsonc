@@ -1,0 +1,12 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "hono-workers-cache-minimal",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-07-01",
+  // Enable Workers Cache (requires Wrangler >= 4.69.0).
+  // Cloudflare checks the cache BEFORE your Worker runs — on a HIT this code
+  // never executes.
+  "cache": {
+    "enabled": true
+  }
+}
