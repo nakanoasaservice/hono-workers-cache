@@ -68,12 +68,14 @@ async function doPurge(
 }
 
 /**
- * Invalidate the edge cache by tag (the equivalent of Next.js' revalidateTag).
+ * Invalidate the edge cache by tag. Named after Next.js' `revalidateTag`, but
+ * accepts a tag or list (Cloudflare can purge many at once) and returns a
+ * `PurgeResult` instead of void.
  *
  * ```ts
  * export const POST = createRoute(async (c) => {
  *   await updatePost(id)
- *   await revalidateTags([`post-${id}`, 'posts'], c)
+ *   await revalidateTag([`post-${id}`, 'posts'], c)
  *   return c.redirect(`/blog/${id}`)
  * })
  * ```
@@ -81,14 +83,18 @@ async function doPurge(
  * The second Context argument is optional (when omitted, the purge goes
  * through `cloudflare:workers`).
  */
-export function revalidateTags(tags: string | string[], c?: Context): Promise<PurgeResult> {
+export function revalidateTag(tags: string | string[], c?: Context): Promise<PurgeResult> {
   const list = (Array.isArray(tags) ? tags : [tags]).filter((t) => t.length > 0)
   if (list.length === 0) return Promise.resolve({ ok: true })
   return doPurge({ tags: list }, c)
 }
 
-/** Invalidate by path prefix (the equivalent of Next.js' revalidatePath). */
-export function revalidatePaths(prefixes: string | string[], c?: Context): Promise<PurgeResult> {
+/**
+ * Invalidate by path prefix via `cache.purge({ pathPrefixes })`. Named after
+ * Next.js' `revalidatePath`, but matches Cloudflare path-prefix purge (not
+ * App Router page/layout types).
+ */
+export function revalidatePath(prefixes: string | string[], c?: Context): Promise<PurgeResult> {
   const list = (Array.isArray(prefixes) ? prefixes : [prefixes]).filter((p) => p.length > 0)
   if (list.length === 0) return Promise.resolve({ ok: true })
   return doPurge({ pathPrefixes: list }, c)

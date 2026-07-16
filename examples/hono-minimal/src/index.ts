@@ -1,11 +1,5 @@
 import { Hono } from 'hono'
-import {
-  addCacheTags,
-  noCache,
-  purgeEverything,
-  revalidateTags,
-  workersCache,
-} from 'hono-workers-cache'
+import { cacheTag, noCache, purgeEverything, revalidateTag, workersCache } from 'hono-workers-cache'
 
 const app = new Hono()
 
@@ -20,7 +14,7 @@ app.get(
   }),
   (c) => {
     // Tags can also be appended from inside the handler.
-    addCacheTags(c, 'rendered-html')
+    cacheTag(c, 'rendered-html')
     return c.html(`<h1>Post ${c.req.param('id')}</h1>`)
   },
 )
@@ -34,7 +28,7 @@ app.get('/api/status', workersCache({ maxAge: 60, strategy: 'shared' }), (c) =>
 app.post('/posts/:id', async (c) => {
   const id = c.req.param('id')
   // ... write to your data source here ...
-  const result = await revalidateTags([`post-${id}`, 'posts'], c)
+  const result = await revalidateTag([`post-${id}`, 'posts'], c)
   return c.json({ updated: id, purge: result })
 })
 

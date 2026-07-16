@@ -5,7 +5,7 @@ import type { WorkersCacheOptions } from './types.js'
 
 declare module 'hono' {
   interface ContextVariableMap {
-    /** Accumulator for tags appended from handlers via addCacheTags(). */
+    /** Accumulator for tags appended from handlers via cacheTag(). */
     __workersCacheTags?: string[]
   }
 }
@@ -22,16 +22,17 @@ const isDev = () =>
 
 /**
  * Append Cache-Tag values to the response from a handler or deeply nested code.
+ * Named after Next.js' `cacheTag` — requires a Hono Context (no async store).
  *
  * ```ts
  * export default createRoute(workersCache({ maxAge: 3600 }), async (c) => {
  *   const post = await getPost(c.req.param('id'))
- *   addCacheTags(c, `post-${post.id}`, `author-${post.authorId}`)
+ *   cacheTag(c, `post-${post.id}`, `author-${post.authorId}`)
  *   return c.render(<Post post={post} />)
  * })
  * ```
  */
-export function addCacheTags(c: Context, ...tags: string[]): void {
+export function cacheTag(c: Context, ...tags: string[]): void {
   const current = c.get('__workersCacheTags') ?? []
   c.set('__workersCacheTags', [...current, ...tags])
 }
@@ -88,7 +89,7 @@ export function workersCache(opts: WorkersCacheOptions = {}): MiddlewareHandler 
       res.headers.set('Cache-Control', edgeDirective)
     }
 
-    // Collect tags: option-provided + automatic route tag + addCacheTags() additions
+    // Collect tags: option-provided + automatic route tag + cacheTag() additions
     const collected: string[] = []
     const optTags = typeof opts.tags === 'function' ? opts.tags(c) : opts.tags
     if (optTags) collected.push(...optTags)

@@ -7,13 +7,13 @@
 
 [Cloudflare Workers Cache](https://developers.cloudflare.com/workers/cache/) を [Hono](https://hono.dev)([HonoX](https://github.com/honojs/honox) でも動作)から宣言的に使うためのミドルウェアと purge ヘルパー。
 
-**Next.js の [Cache Components](https://nextjs.org/docs/app/getting-started/cache-components) のような体験を Hono に**: ルートのフレッシュ期間を宣言し、レンダリング内容にタグを付け、データが変わったら `revalidateTags()` を呼ぶ — 次のリクエストだけが再生成され、それ以外はキャッシュから配信され続けます。違いはキャッシュが Worker の前段、Cloudflare のエッジで行われること。HIT は CPU コストゼロで、あなたのコードは一切実行されません。
+**Next.js の [Cache Components](https://nextjs.org/docs/app/getting-started/cache-components) のような体験を Hono に**: ルートのフレッシュ期間を宣言し、レンダリング内容にタグを付け、データが変わったら `revalidateTag()` を呼ぶ — 次のリクエストだけが再生成され、それ以外はキャッシュから配信され続けます。違いはキャッシュが Worker の前段、Cloudflare のエッジで行われること。HIT は CPU コストゼロで、あなたのコードは一切実行されません。
 
 [English README](./README.md)
 
 ```ts
 import { Hono } from 'hono'
-import { addCacheTags, revalidateTags, workersCache } from 'hono-workers-cache'
+import { cacheTag, revalidateTag, workersCache } from 'hono-workers-cache'
 
 const app = new Hono()
 
@@ -21,7 +21,7 @@ const app = new Hono()
 app.get('/posts/:id', workersCache(), async (c) => {
   const post = await getPostById(c.req.param('id'))
 
-  addCacheTags(c, `post-${post.id}`) // 更新後に purge できるようタグを付ける
+  cacheTag(c, `post-${post.id}`) // 更新後に purge できるようタグを付ける
 
   return c.json(post)
 })
@@ -33,7 +33,7 @@ app.post('/posts/:id', async (c) => {
 
   await updatePost(id, body)
 
-  await revalidateTags(`post-${id}`, c)
+  await revalidateTag(`post-${id}`, c)
 
   return c.json({ ok: true })
 })
@@ -46,7 +46,7 @@ Workers Cache(2026 年登場)は Worker の**前段**で動くエッジキャッ
 この事実がパッケージ全体の設計を規定します。このパッケージは**キャッシュを読み書きしません**。仕事は 2 つだけです。
 
 1. **ポリシー宣言** — `workersCache()` がレスポンスに `Cache-Control` / `CDN-Cache-Control` / `Cache-Tag` を付与
-2. **無効化** — `revalidateTags()` / `revalidatePaths()` / `purgeEverything()` が [`cache.purge()`](https://developers.cloudflare.com/workers/cache/purge/) を Next.js の `revalidateTag` 風 API で抽象化
+2. **無効化** — `revalidateTag()` / `revalidatePath()` / `purgeEverything()` が [`cache.purge()`](https://developers.cloudflare.com/workers/cache/purge/) を Next.js の `revalidateTag` 風 API で抽象化
 
 ### `hono/cache` との違い
 
@@ -88,7 +88,7 @@ Wrangler 設定で Workers Cache を有効化します(Wrangler >= 4.69.0)。こ
 
 ```ts
 import { Hono } from 'hono'
-import { noCache, revalidateTags, workersCache } from 'hono-workers-cache'
+import { noCache, revalidateTag, workersCache } from 'hono-workers-cache'
 
 const app = new Hono()
 
@@ -106,7 +106,7 @@ app.get('/admin', noCache(), (c) => c.text('admin'))
 // 更新後に無効化
 app.post('/posts/:id', async (c) => {
   await update(c.req.param('id'))
-  await revalidateTags('route:/posts/:id', c)
+  await revalidateTag('route:/posts/:id', c)
   return c.json({ ok: true })
 })
 ```
@@ -128,7 +128,7 @@ Cache-Tag:         route:/posts/:id
 ```tsx
 // app/routes/blog/[id].tsx
 import { createRoute } from 'honox/factory'
-import { addCacheTags, workersCache } from 'hono-workers-cache'
+import { cacheTag, workersCache } from 'hono-workers-cache'
 
 export default createRoute(
   workersCache({
@@ -138,7 +138,7 @@ export default createRoute(
   }),
   async (c) => {
     const post = await getPost(c.req.param('id'))
-    addCacheTags(c, `author-${post.authorId}`) // ハンドラ内から追記も可能
+    cacheTag(c, `author-${post.authorId}`) // ハンドラ内から追記も可能
     return c.render(<Post post={post} />)
   },
 )
@@ -165,17 +165,17 @@ export default createRoute(noCache())
 ### 更新時の無効化
 
 ```tsx
-import { revalidateTags } from 'hono-workers-cache'
+import { revalidateTag } from 'hono-workers-cache'
 
 export const POST = createRoute(async (c) => {
   const id = c.req.param('id')
   await updatePost(id, await c.req.parseBody())
-  await revalidateTags([`post-${id}`, 'posts'], c) // c は省略可
+  await revalidateTag([`post-${id}`, 'posts'], c) // c は省略可
   return c.redirect(`/blog/${id}`)
 })
 ```
 
-`revalidatePaths('/blog/')`、`purgeEverything()` も同様です。Workers ランタイム外(Node での dev、テスト)では `{ ok: false, reason: 'cache-unavailable' }` を返す no-op になり、throw せず開発を壊しません。
+`revalidatePath('/blog/')`、`purgeEverything()` も同様です。Workers ランタイム外(Node での dev、テスト)では `{ ok: false, reason: 'cache-unavailable' }` を返す no-op になり、throw せず開発を壊しません。
 
 ## API
 
@@ -204,15 +204,17 @@ export const POST = createRoute(async (c) => {
 
 `Cache-Control: no-store` を設定し、さらに上流がスタンプした `CDN-Cache-Control` / `Cloudflare-CDN-Cache-Control` / `Cache-Tag` を**削除**します。
 
-### `addCacheTags(c, ...tags): void`
+### `cacheTag(c, ...tags): void`
 
-ハンドラや深い階層のコードからレスポンスにタグを追記します。ミドルウェアの `tags` / `routeTag` の出力とマージされます。
+ハンドラや深い階層のコードからレスポンスにタグを追記します。ミドルウェアの `tags` / `routeTag` の出力とマージされます。Next.js の `cacheTag` と同じ名前ですが、Hono の `Context` が必要です（async local store はありません）。
 
 ### purge ヘルパー
 
+名前は Next.js（`revalidateTag` / `revalidatePath`）に合わせていますが、意味は Workers Cache です。配列での一括 purge、省略可能な `c`、戻り値は `Promise<PurgeResult>`（`void` ではない）。`revalidatePath` は Cloudflare の **path prefix** purge で、App Router の `page` / `layout` ではありません。
+
 ```ts
-revalidateTags(tags: string | string[], c?: Context): Promise<PurgeResult>
-revalidatePaths(prefixes: string | string[], c?: Context): Promise<PurgeResult>
+revalidateTag(tags: string | string[], c?: Context): Promise<PurgeResult>
+revalidatePath(prefixes: string | string[], c?: Context): Promise<PurgeResult>
 purgeEverything(c?: Context): Promise<PurgeResult>
 
 interface PurgeResult {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { revalidateTags } from '../src/index.js'
+import { revalidateTag } from '../src/index.js'
 
 /**
  * Runs on workerd via @cloudflare/vitest-pool-workers.
@@ -12,7 +12,7 @@ import { revalidateTags } from '../src/index.js'
  */
 describe('purge helpers on workerd', () => {
   it("resolves the 'cloudflare:workers' import without throwing", async () => {
-    const result = await revalidateTags(['integration-test'])
+    const result = await revalidateTag(['integration-test'])
     expect(typeof result.ok).toBe('boolean')
     if (!result.ok) {
       expect(['cache-unavailable', 'purge-failed']).toContain(result.reason)

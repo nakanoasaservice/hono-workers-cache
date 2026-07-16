@@ -7,11 +7,11 @@
 
 Declarative [Cloudflare Workers Cache](https://developers.cloudflare.com/workers/cache/) middleware and purge helpers for [Hono](https://hono.dev) (works with [HonoX](https://github.com/honojs/honox)).
 
-**A Next.js [Cache Components](https://nextjs.org/docs/app/getting-started/cache-components)-like experience for Hono**: declare how long a route stays fresh, tag what it renders, and call `revalidateTags()` when the data changes — the next request is regenerated, everything else keeps being served from cache. The difference: caching happens at Cloudflare's edge, in front of your Worker, so a cache hit costs zero CPU and your code never even runs.
+**A Next.js [Cache Components](https://nextjs.org/docs/app/getting-started/cache-components)-like experience for Hono**: declare how long a route stays fresh, tag what it renders, and call `revalidateTag()` when the data changes — the next request is regenerated, everything else keeps being served from cache. The difference: caching happens at Cloudflare's edge, in front of your Worker, so a cache hit costs zero CPU and your code never even runs.
 
 ```ts
 import { Hono } from 'hono'
-import { addCacheTags, revalidateTags, workersCache } from 'hono-workers-cache'
+import { cacheTag, revalidateTag, workersCache } from 'hono-workers-cache'
 
 const app = new Hono()
 
@@ -19,7 +19,7 @@ const app = new Hono()
 app.get('/posts/:id', workersCache(), async (c) => {
   const post = await getPostById(c.req.param('id'))
 
-  addCacheTags(c, `post-${post.id}`) // tag so we can purge after an update
+  cacheTag(c, `post-${post.id}`) // tag so we can purge after an update
 
   return c.json(post)
 })
@@ -31,7 +31,7 @@ app.post('/posts/:id', async (c) => {
 
   await updatePost(id, body)
 
-  await revalidateTags(`post-${id}`, c)
+  await revalidateTag(`post-${id}`, c)
 
   return c.json({ ok: true })
 })
@@ -44,7 +44,7 @@ Workers Cache (2026) is an edge cache that runs **in front of** your Worker. Ena
 That shapes this package's entire design: it **never reads or writes the cache**. It only does two things:
 
 1. **Declare policy** — `workersCache()` stamps `Cache-Control` / `CDN-Cache-Control` / `Cache-Tag` on responses
-2. **Invalidate** — `revalidateTags()` / `revalidatePaths()` / `purgeEverything()` wrap [`cache.purge()`](https://developers.cloudflare.com/workers/cache/purge/) in a Next.js-`revalidateTag`-style API
+2. **Invalidate** — `revalidateTag()` / `revalidatePath()` / `purgeEverything()` wrap [`cache.purge()`](https://developers.cloudflare.com/workers/cache/purge/) in a Next.js-`revalidateTag`-style API
 
 ### Not the same as `hono/cache`
 
@@ -86,7 +86,7 @@ Enable Workers Cache in your Wrangler configuration (Wrangler >= 4.69.0). This i
 
 ```ts
 import { Hono } from 'hono'
-import { noCache, revalidateTags, workersCache } from 'hono-workers-cache'
+import { noCache, revalidateTag, workersCache } from 'hono-workers-cache'
 
 const app = new Hono()
 
@@ -104,7 +104,7 @@ app.get('/admin', noCache(), (c) => c.text('admin'))
 // Invalidate after a mutation
 app.post('/posts/:id', async (c) => {
   await update(c.req.param('id'))
-  await revalidateTags('route:/posts/:id', c)
+  await revalidateTag('route:/posts/:id', c)
   return c.json({ ok: true })
 })
 ```
@@ -126,7 +126,7 @@ This is a plain Hono middleware — HonoX simply provides `_middleware.ts` / `cr
 ```tsx
 // app/routes/blog/[id].tsx
 import { createRoute } from 'honox/factory'
-import { addCacheTags, workersCache } from 'hono-workers-cache'
+import { cacheTag, workersCache } from 'hono-workers-cache'
 
 export default createRoute(
   workersCache({
@@ -136,7 +136,7 @@ export default createRoute(
   }),
   async (c) => {
     const post = await getPost(c.req.param('id'))
-    addCacheTags(c, `author-${post.authorId}`) // append tags from inside the handler
+    cacheTag(c, `author-${post.authorId}`) // append tags from inside the handler
     return c.render(<Post post={post} />)
   },
 )
@@ -163,17 +163,17 @@ export default createRoute(noCache())
 ### Invalidation
 
 ```tsx
-import { revalidateTags } from 'hono-workers-cache'
+import { revalidateTag } from 'hono-workers-cache'
 
 export const POST = createRoute(async (c) => {
   const id = c.req.param('id')
   await updatePost(id, await c.req.parseBody())
-  await revalidateTags([`post-${id}`, 'posts'], c) // c is optional
+  await revalidateTag([`post-${id}`, 'posts'], c) // c is optional
   return c.redirect(`/blog/${id}`)
 })
 ```
 
-`revalidatePaths('/blog/')` and `purgeEverything()` work the same way. Outside the Workers runtime (Node during dev, tests) the helpers become a no-op resolving to `{ ok: false, reason: 'cache-unavailable' }` — they never throw and never break dev.
+`revalidatePath('/blog/')` and `purgeEverything()` work the same way. Outside the Workers runtime (Node during dev, tests) the helpers become a no-op resolving to `{ ok: false, reason: 'cache-unavailable' }` — they never throw and never break dev.
 
 ## API
 
@@ -202,15 +202,17 @@ The middleware **leaves the response untouched** when any of these hold:
 
 Sets `Cache-Control: no-store` **and deletes** any upstream-stamped `CDN-Cache-Control`, `Cloudflare-CDN-Cache-Control`, and `Cache-Tag`.
 
-### `addCacheTags(c, ...tags): void`
+### `cacheTag(c, ...tags): void`
 
-Append tags to the response from a handler or deeply nested code. Merged with `tags` / `routeTag` output by the middleware.
+Append tags to the response from a handler or deeply nested code. Merged with `tags` / `routeTag` output by the middleware. Same name as Next.js' `cacheTag`, but requires a Hono `Context` (no async local store).
 
 ### Purge helpers
 
+Named after Next.js (`revalidateTag` / `revalidatePath`), with Workers Cache semantics: arrays are accepted for batch purge, `c` is optional, and results are `Promise<PurgeResult>` (not `void`). `revalidatePath` matches Cloudflare **path prefixes**, not App Router `page` / `layout` types.
+
 ```ts
-revalidateTags(tags: string | string[], c?: Context): Promise<PurgeResult>
-revalidatePaths(prefixes: string | string[], c?: Context): Promise<PurgeResult>
+revalidateTag(tags: string | string[], c?: Context): Promise<PurgeResult>
+revalidatePath(prefixes: string | string[], c?: Context): Promise<PurgeResult>
 purgeEverything(c?: Context): Promise<PurgeResult>
 
 interface PurgeResult {

@@ -1,9 +1,9 @@
 import { Hono } from 'hono'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { addCacheTags, noCache, workersCache } from '../src/index.js'
+import { cacheTag, noCache, workersCache } from '../src/index.js'
 
 describe('workersCache — cdn-split strategy (default)', () => {
-  it('emits the three headers, merging option tags, the route tag and addCacheTags()', async () => {
+  it('emits the three headers, merging option tags, the route tag and cacheTag()', async () => {
     const app = new Hono()
     app.get(
       '/blog/:id',
@@ -13,7 +13,7 @@ describe('workersCache — cdn-split strategy (default)', () => {
         tags: (c) => [`post-${c.req.param('id')}`, 'posts'],
       }),
       (c) => {
-        addCacheTags(c, 'from-handler')
+        cacheTag(c, 'from-handler')
         return c.html('<h1>post</h1>')
       },
     )
