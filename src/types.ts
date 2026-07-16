@@ -24,9 +24,15 @@ export type CacheStrategy =
   | 'shared'
 
 export interface WorkersCacheOptions {
-  /** Freshness window at the edge, in seconds. */
-  maxAge: number
-  /** stale-while-revalidate window (seconds or 'unbounded'). */
+  /**
+   * Freshness window at the edge, in seconds.
+   * Default: 300 (5 minutes).
+   */
+  maxAge?: number
+  /**
+   * stale-while-revalidate window (seconds or 'unbounded').
+   * Default: 900 (15 minutes). Pass 0 to disable serving stale.
+   */
   staleWhileRevalidate?: SwrWindow
   /** stale-if-error window in seconds. Serves stale content when the origin returns 5xx. */
   staleIfError?: number

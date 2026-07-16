@@ -11,6 +11,17 @@ export const UNBOUNDED_SWR_SECONDS = 31_536_000
 export const BROWSER_REVALIDATE = 'public, max-age=0, must-revalidate'
 
 /**
+ * Default freshness window: 5 minutes. Together with DEFAULT_SWR this is a
+ * conservative transposition of Next.js' default `cacheLife` profile
+ * (stale 5 min / revalidate 15 min): forget to purge and content still
+ * refreshes itself within minutes.
+ */
+export const DEFAULT_MAX_AGE = 300
+
+/** Default stale-while-revalidate window: 15 minutes. */
+export const DEFAULT_SWR = 900
+
+/**
  * Cloudflare's Cache-Tag limits: 16KB for the whole header / 1024 bytes per
  * tag. Exceeding them drops the header silently, so we cap conservatively at 8KB.
  */
@@ -25,13 +36,14 @@ const byteLength = (s: string) => encoder.encode(s).length
  * If the `cacheControl` escape hatch is set, it is used **verbatim, with no
  * processing whatsoever**.
  */
-export function buildEdgeDirective(opts: WorkersCacheOptions): string {
+export function buildEdgeDirective(opts: WorkersCacheOptions = {}): string {
   if (opts.cacheControl) return opts.cacheControl
 
-  const parts = ['public', `max-age=${opts.maxAge}`]
-  if (opts.staleWhileRevalidate !== undefined) {
-    parts.push(`stale-while-revalidate=${resolveSwr(opts.staleWhileRevalidate)}`)
-  }
+  const parts = [
+    'public',
+    `max-age=${opts.maxAge ?? DEFAULT_MAX_AGE}`,
+    `stale-while-revalidate=${resolveSwr(opts.staleWhileRevalidate ?? DEFAULT_SWR)}`,
+  ]
   if (opts.staleIfError !== undefined) {
     parts.push(`stale-if-error=${opts.staleIfError}`)
   }

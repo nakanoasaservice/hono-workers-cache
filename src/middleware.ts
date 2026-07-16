@@ -46,7 +46,7 @@ export function addCacheTags(c: Context, ...tags: string[]): void {
  *
  * Prerequisite: `"cache": { "enabled": true }` in wrangler.jsonc (Wrangler >= 4.69.0)
  */
-export function workersCache(opts: WorkersCacheOptions): MiddlewareHandler {
+export function workersCache(opts: WorkersCacheOptions = {}): MiddlewareHandler {
   const strategy = opts.strategy ?? 'cdn-split'
   const useRouteTag = opts.routeTag !== false
 

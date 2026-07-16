@@ -2,8 +2,21 @@ import { describe, expect, it } from 'vitest'
 import { buildEdgeDirective, formatCacheTag } from '../src/index.js'
 
 describe('buildEdgeDirective', () => {
-  it('builds public + max-age from options', () => {
-    expect(buildEdgeDirective({ maxAge: 3600 })).toBe('public, max-age=3600')
+  it('applies the defaults (5 min + SWR 15 min) with no options', () => {
+    expect(buildEdgeDirective()).toBe('public, max-age=300, stale-while-revalidate=900')
+    expect(buildEdgeDirective({})).toBe('public, max-age=300, stale-while-revalidate=900')
+  })
+
+  it('builds max-age from options, defaulting the SWR window', () => {
+    expect(buildEdgeDirective({ maxAge: 3600 })).toBe(
+      'public, max-age=3600, stale-while-revalidate=900',
+    )
+  })
+
+  it('disables serving stale with staleWhileRevalidate: 0', () => {
+    expect(buildEdgeDirective({ maxAge: 60, staleWhileRevalidate: 0 })).toBe(
+      'public, max-age=60, stale-while-revalidate=0',
+    )
   })
 
   it('appends stale-while-revalidate and stale-if-error', () => {

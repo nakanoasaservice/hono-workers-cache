@@ -78,6 +78,9 @@ import { noCache, revalidateTags, workersCache } from 'hono-workers-cache'
 
 const app = new Hono()
 
+// 設定ゼロ: フレッシュ 5 分 → その後 15 分間は stale を配信しつつ裏で再検証
+app.get('/about', workersCache(), (c) => c.html('<h1>About</h1>'))
+
 // キャッシュ対象: エッジは SWR で配信、ブラウザは毎回エッジへ再検証
 app.get('/posts/:id', workersCache({ maxAge: 3600, staleWhileRevalidate: 300 }), (c) =>
   c.json({ id: c.req.param('id') }),
@@ -164,10 +167,12 @@ export const POST = createRoute(async (c) => {
 
 ### `workersCache(options): MiddlewareHandler`
 
+すべてのオプションは省略可能です — 引数なしの `workersCache()` はデフォルトポリシー(フレッシュ 5 分、その後 15 分間は stale 配信 + 裏で再検証)を適用します。
+
 | オプション | 型 | デフォルト | 説明 |
 | --- | --- | --- | --- |
-| `maxAge` | `number` | —(必須) | エッジでのフレッシュ期間(秒) |
-| `staleWhileRevalidate` | `number \| 'unbounded'` | — | SWR ウィンドウ。`'unbounded'` は 31,536,000 秒(1 年)に解決 |
+| `maxAge` | `number` | `300`(5 分) | エッジでのフレッシュ期間(秒) |
+| `staleWhileRevalidate` | `number \| 'unbounded'` | `900`(15 分) | SWR ウィンドウ。`'unbounded'` は 31,536,000 秒(1 年)に解決。`0` で stale 配信を無効化 |
 | `staleIfError` | `number` | — | オリジンが 5xx を返した際に stale を配信する秒数 |
 | `tags` | `string[] \| (c: Context) => string[]` | — | `Cache-Tag` の値。関数はリクエストごとに評価 |
 | `routeTag` | `boolean` | `true` | マッチしたルートパターンから `route:/blog/:id` タグを自動付与 |
@@ -230,6 +235,7 @@ CDN-Cache-Control: public, max-age=…, swr=…             ← エッジ
 
 ## Design Notes
 
+- **デフォルトポリシーは `maxAge: 300` + `staleWhileRevalidate: 900`** — Next.js の default `cacheLife` プロファイル(stale 5 分 / revalidate 15 分)の保守的な転写です。本パッケージの思想はタグ purge 駆動ですが、デフォルトは「purge を忘れた人」にも安全である必要があります。SWR により、レスポンスは常に即答のままコンテンツは数分以内に自動更新されます。
 - **デフォルトは `cdn-split`**(vinext 由来): ブラウザには `max-age=0, must-revalidate` を返して stale コピーを残さず、エッジには `CDN-Cache-Control` で本来のポリシーを渡します。purge の即時反映が目的です。
 - **`cacheControl` は verbatim** — `s-maxage` → `max-age` の正規化は行いません。vinext の正規化は *Next.js が生成する文字列*への対処です。ここではユーザー自身が書く文字列であり、正規化すると `shared` 戦略での `s-maxage` + `max-age` 併記という標準テクニックを潰してしまいます。
 - **触らない条件**(非 GET/HEAD、`Set-Cookie`、キャッシュ不能ステータス、設定済み `Cache-Control`)を設けているのは、これらの場合のヘッダ付与が無意味(どのみちエッジで BYPASS される)か、ユーザーの明示的な意図の上書きになるためです。

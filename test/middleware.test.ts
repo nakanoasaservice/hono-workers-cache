@@ -27,14 +27,30 @@ describe('workersCache — cdn-split strategy (default)', () => {
     expect(res.headers.get('Cache-Tag')).toBe('post-123,posts,route:/blog/:id,from-handler')
   })
 
+  it('applies the default policy (5 min + SWR 15 min) when called with no options', async () => {
+    const app = new Hono()
+    app.get('/defaults', workersCache(), (c) => c.text('d'))
+
+    const res = await app.request('/defaults')
+    expect(res.headers.get('Cache-Control')).toBe('public, max-age=0, must-revalidate')
+    expect(res.headers.get('CDN-Cache-Control')).toBe(
+      'public, max-age=300, stale-while-revalidate=900',
+    )
+    expect(res.headers.get('Cache-Tag')).toBe('route:/defaults')
+  })
+
   it('emits stale-if-error when configured', async () => {
     const app = new Hono()
-    app.get('/x', workersCache({ maxAge: 60, staleIfError: 600, routeTag: false }), (c) =>
-      c.text('x'),
+    app.get(
+      '/x',
+      workersCache({ maxAge: 60, staleWhileRevalidate: 30, staleIfError: 600, routeTag: false }),
+      (c) => c.text('x'),
     )
 
     const res = await app.request('/x')
-    expect(res.headers.get('CDN-Cache-Control')).toBe('public, max-age=60, stale-if-error=600')
+    expect(res.headers.get('CDN-Cache-Control')).toBe(
+      'public, max-age=60, stale-while-revalidate=30, stale-if-error=600',
+    )
   })
 
   it("resolves staleWhileRevalidate: 'unbounded' to one year", async () => {
@@ -77,7 +93,7 @@ describe('workersCache — shared strategy', () => {
     )
 
     const res = await app.request('/api/data')
-    expect(res.headers.get('Cache-Control')).toBe('public, max-age=60')
+    expect(res.headers.get('Cache-Control')).toBe('public, max-age=60, stale-while-revalidate=900')
     expect(res.headers.get('CDN-Cache-Control')).toBeNull()
     expect(res.headers.get('Cache-Tag')).toBeNull()
   })
