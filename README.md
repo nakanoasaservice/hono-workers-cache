@@ -11,19 +11,28 @@ Declarative [Cloudflare Workers Cache](https://developers.cloudflare.com/workers
 
 ```ts
 import { Hono } from 'hono'
-import { revalidateTags, workersCache } from 'hono-workers-cache'
+import { addCacheTags, revalidateTags, workersCache } from 'hono-workers-cache'
 
 const app = new Hono()
 
-app.get(
-  '/posts/:id',
-  workersCache({ maxAge: 3600, staleWhileRevalidate: 300, tags: (c) => [`post-${c.req.param('id')}`] }),
-  (c) => c.json({ id: c.req.param('id') }),
-)
+// Cached read — defaults: fresh 5 min, then stale-while-revalidate for 15 min
+app.get('/posts/:id', workersCache(), async (c) => {
+  const post = await getPostById(c.req.param('id'))
 
+  addCacheTags(c, `post-${post.id}`) // tag so we can purge after an update
+
+  return c.json(post)
+})
+
+// Mutation — persist changes, then purge the tag so the next GET regenerates
 app.post('/posts/:id', async (c) => {
-  await updatePost(c.req.param('id'))
-  await revalidateTags(`post-${c.req.param('id')}`, c)
+  const id = c.req.param('id')
+  const { body } = await c.req.json<{ body: string }>()
+
+  await updatePost(id, body)
+
+  await revalidateTags(`post-${id}`, c)
+
   return c.json({ ok: true })
 })
 ```

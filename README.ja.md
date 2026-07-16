@@ -13,19 +13,28 @@
 
 ```ts
 import { Hono } from 'hono'
-import { revalidateTags, workersCache } from 'hono-workers-cache'
+import { addCacheTags, revalidateTags, workersCache } from 'hono-workers-cache'
 
 const app = new Hono()
 
-app.get(
-  '/posts/:id',
-  workersCache({ maxAge: 3600, staleWhileRevalidate: 300, tags: (c) => [`post-${c.req.param('id')}`] }),
-  (c) => c.json({ id: c.req.param('id') }),
-)
+// キャッシュ対象の GET — デフォルト: フレッシュ 5 分 → 15 分間は stale を配信しつつ裏で再検証
+app.get('/posts/:id', workersCache(), async (c) => {
+  const post = await getPostById(c.req.param('id'))
 
+  addCacheTags(c, `post-${post.id}`) // 更新後に purge できるようタグを付ける
+
+  return c.json(post)
+})
+
+// 更新 — DB に保存したあと、タグを purge して次の GET で再生成させる
 app.post('/posts/:id', async (c) => {
-  await updatePost(c.req.param('id'))
-  await revalidateTags(`post-${c.req.param('id')}`, c)
+  const id = c.req.param('id')
+  const { body } = await c.req.json<{ body: string }>()
+
+  await updatePost(id, body)
+
+  await revalidateTags(`post-${id}`, c)
+
   return c.json({ ok: true })
 })
 ```
