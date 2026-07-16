@@ -1,33 +1,60 @@
-name: Release
+name: Publish
 
 on:
-  push:
-    branches: [main]
-
-concurrency: ${{ github.workflow }}-${{ github.ref }}
+  workflow_dispatch:
 
 permissions:
   contents: write
-  pull-requests: write
   id-token: write
 
 jobs:
-  release:
+  publish:
     runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
           registry-url: https://registry.npmjs.org
-      - run: pnpm install --frozen-lockfile
-      - name: Create release PR or publish
-        uses: changesets/action@v1
-        with:
-          publish: pnpm exec changeset publish
+
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      - name: Publish to npm
+        run: |
+          VERSION=$(jq -r .version package.json)
+          if [[ "$VERSION" == *-* ]]; then
+            TAG=$(echo "$VERSION" | sed 's/.*-\([^.]*\).*/\1/')
+            pnpm publish --tag "$TAG"
+          else
+            pnpm publish
+          fi
+
+      - name: Create Release
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NPM_CONFIG_PROVENANCE: 'true'
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION=$(jq -r .version package.json)
+          if git rev-parse "v$VERSION" >/dev/null 2>&1; then
+            echo "Tag v$VERSION already exists. Skipping release creation."
+          else
+            echo "Creating release for v$VERSION"
+            gh release create "v$VERSION" --generate-notes
+          fi

@@ -261,7 +261,7 @@ pnpm lint
 pnpm build
 ```
 
-リリースは [Changesets](https://github.com/changesets/changesets) で管理し、npm publish は provenance 付きで行います。
+リリースは **Publish** ワークフロー（`main` 上の `workflow_dispatch`）から手動実行します。実行前に `package.json` の `version` を更新してください。npm publish は provenance 付きで行います。
 
 ## License
 

@@ -259,7 +259,7 @@ pnpm lint
 pnpm build
 ```
 
-Releases are managed with [Changesets](https://github.com/changesets/changesets); publishing runs with npm provenance.
+Releases are published manually from the **Publish** workflow (`workflow_dispatch` on `main`). Bump `version` in `package.json` before triggering the workflow. Publishing runs with npm provenance.
 
 ## License
 
