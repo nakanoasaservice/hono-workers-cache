@@ -2,6 +2,8 @@
 
 [Cloudflare Workers Cache](https://developers.cloudflare.com/workers/cache/) を [Hono](https://hono.dev)([HonoX](https://github.com/honojs/honox) でも動作)から宣言的に使うためのミドルウェアと purge ヘルパー。
 
+**Next.js の [Cache Components](https://nextjs.org/docs/app/getting-started/cache-components) のような体験を Hono に**: ルートのフレッシュ期間を宣言し、レンダリング内容にタグを付け、データが変わったら `revalidateTags()` を呼ぶ — 次のリクエストだけが再生成され、それ以外はキャッシュから配信され続けます。違いはキャッシュが Worker の前段、Cloudflare のエッジで行われること。HIT は CPU コストゼロで、あなたのコードは一切実行されません。
+
 [English README](./README.md)
 
 ```ts
