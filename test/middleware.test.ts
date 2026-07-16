@@ -51,6 +51,15 @@ describe('workersCache — cdn-split strategy (default)', () => {
     )
   })
 
+  it('tags with the final route template when applied as directory middleware', async () => {
+    const app = new Hono()
+    app.use('/blog/*', workersCache({ maxAge: 60 }))
+    app.get('/blog/:id', (c) => c.text('post'))
+
+    const res = await app.request('/blog/123')
+    expect(res.headers.get('Cache-Tag')).toBe('route:/blog/:id')
+  })
+
   it('does not add a route tag for a bare wildcard route', async () => {
     const app = new Hono()
     app.get('/*', workersCache({ maxAge: 60 }), (c) => c.text('w'))

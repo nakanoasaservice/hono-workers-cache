@@ -1,4 +1,5 @@
 import type { Context, MiddlewareHandler } from 'hono'
+import { routePath } from 'hono/route'
 import { BROWSER_REVALIDATE, buildEdgeDirective, formatCacheTag } from './headers.js'
 import type { WorkersCacheOptions } from './types.js'
 
@@ -91,8 +92,11 @@ export function workersCache(opts: WorkersCacheOptions): MiddlewareHandler {
     const collected: string[] = []
     const optTags = typeof opts.tags === 'function' ? opts.tags(c) : opts.tags
     if (optTags) collected.push(...optTags)
-    if (useRouteTag && c.req.routePath && c.req.routePath !== '/*') {
-      collected.push(`route:${c.req.routePath}`)
+    // Called after next(), so this resolves to the route template of the
+    // handler that actually produced the response.
+    const matchedRoutePath = routePath(c)
+    if (useRouteTag && matchedRoutePath && matchedRoutePath !== '/*') {
+      collected.push(`route:${matchedRoutePath}`)
     }
     const dynamicTags = c.get('__workersCacheTags')
     if (dynamicTags) collected.push(...dynamicTags)

@@ -232,7 +232,7 @@ CDN-Cache-Control: public, max-age=…, swr=…             ← エッジ
 - **`cacheControl` は verbatim** — `s-maxage` → `max-age` の正規化は行いません。vinext の正規化は *Next.js が生成する文字列*への対処です。ここではユーザー自身が書く文字列であり、正規化すると `shared` 戦略での `s-maxage` + `max-age` 併記という標準テクニックを潰してしまいます。
 - **触らない条件**(非 GET/HEAD、`Set-Cookie`、キャッシュ不能ステータス、設定済み `Cache-Control`)を設けているのは、これらの場合のヘッダ付与が無意味(どのみちエッジで BYPASS される)か、ユーザーの明示的な意図の上書きになるためです。
 - **`Cache-Tag` サイズガード**: Cloudflare の制限はヘッダ全体 16KB / 1 タグ 1024 バイトで、超過は**サイレントに破棄**されます。保守的に 8KB で打ち切り、カンマ入り・1024 バイト超のタグをスキップ、重複を除去し、バイト長は `TextEncoder` で計測します(マルチバイト対応)。
-- **ルート自動タグ** `route:/blog/:id` を `c.req.routePath` から生成し、ルートテンプレート単位の purge を可能にします。`/*` のみの場合は付与しません。
+- **ルート自動タグ** `route:/blog/:id` をマッチしたルートテンプレート(`routePath()` ルートヘルパー)から生成し、ルートテンプレート単位の purge を可能にします。`/*` のみの場合は付与しません。
 - **purge のランタイム解決**は Workers 外で決して throw しません — `ctx.cache` の duck typing → 動的 import → `cache-unavailable` の no-op、の順で解決し、Node ベースの dev やテストを壊しません。
 - **purge 結果の検査**(当初設計への拡張): [公式ドキュメント](https://developers.cloudflare.com/workers/cache/purge/#return-value)のとおり、`purge()` はレート制限などの失敗時に reject するのではなく `{ success, errors }` に*解決*します。ヘルパーは reject の捕捉に加えて、明示的な `success: false` を検査し `{ ok: false, reason: 'purge-failed', error: errors }` にマップします。
 - **`noCache()` は上流のキャッシュヘッダを削除**します(`no-store` を設定するだけではありません)。vinext の非キャッシュ分岐と同じ防御で、上流ミドルウェアの `CDN-Cache-Control` が残っているとエッジでキャッシュされてしまうためです。

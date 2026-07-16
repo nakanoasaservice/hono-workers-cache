@@ -48,7 +48,7 @@
     "prepublishOnly": "pnpm build"
   },
   "peerDependencies": {
-    "hono": ">=4"
+    "hono": ">=4.8.0"
   },
   "packageManager": "pnpm@10.34.3",
   "engines": {
