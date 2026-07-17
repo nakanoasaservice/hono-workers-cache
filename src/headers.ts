@@ -1,25 +1,26 @@
-import type { SwrWindow, WorkersCacheOptions } from './types.js'
+import type { CacheLife, CacheLifeProfile, ResolvedCacheLife } from './types.js'
 
 /**
- * Finite value substituted for 'unbounded' SWR (one year).
- * Cloudflare follows RFC 5861 and treats a value-less stale-while-revalidate
- * as a zero-width window.
+ * Finite value substituted for `expire: 'never'` (one year). Cloudflare has no
+ * infinite cache window, and follows RFC 5861 in treating a value-less
+ * stale-while-revalidate as a zero-width window — so we always spell it out.
  */
-export const UNBOUNDED_SWR_SECONDS = 31_536_000
-
-/** Browser policy: revalidate with the edge on every request (conditional 304s allowed). */
-export const BROWSER_REVALIDATE = 'public, max-age=0, must-revalidate'
+export const NEVER_EXPIRE_SECONDS = 31_536_000
 
 /**
- * Default freshness window: 5 minutes. Together with DEFAULT_SWR this is a
- * conservative transposition of Next.js' default `cacheLife` profile
- * (stale 5 min / revalidate 15 min): forget to purge and content still
- * refreshes itself within minutes.
+ * Built-in cache profiles — identical names and values to Next.js
+ * (packages/next/src/server/config-shared.ts, `defaultCacheLifeProfiles`).
+ * Next.js' INFINITE_CACHE becomes `'never'` (one year at the edge).
  */
-export const DEFAULT_MAX_AGE = 300
-
-/** Default stale-while-revalidate window: 15 minutes. */
-export const DEFAULT_SWR = 900
+export const cacheLifeProfiles: Record<CacheLifeProfile, ResolvedCacheLife> = {
+  default: { stale: 300, revalidate: 900, expire: 'never' },
+  seconds: { stale: 30, revalidate: 1, expire: 60 },
+  minutes: { stale: 300, revalidate: 60, expire: 3_600 },
+  hours: { stale: 300, revalidate: 3_600, expire: 86_400 },
+  days: { stale: 300, revalidate: 86_400, expire: 604_800 },
+  weeks: { stale: 300, revalidate: 604_800, expire: 2_592_000 },
+  max: { stale: 300, revalidate: 2_592_000, expire: 31_536_000 },
+}
 
 /**
  * Cloudflare's Cache-Tag limits: 16KB for the whole header / 1024 bytes per
@@ -32,26 +33,49 @@ const encoder = new TextEncoder()
 const byteLength = (s: string) => encoder.encode(s).length
 
 /**
- * Build the edge-facing Cache-Control directive string.
- * If the `cacheControl` escape hatch is set, it is used **verbatim, with no
- * processing whatsoever**.
+ * Fill in a partial `CacheLife` from its base profile ('default' when none is
+ * given). Explicit fields win over the profile's values.
  */
-export function buildEdgeDirective(opts: WorkersCacheOptions = {}): string {
-  if (opts.cacheControl) return opts.cacheControl
-
-  const parts = [
-    'public',
-    `max-age=${opts.maxAge ?? DEFAULT_MAX_AGE}`,
-    `stale-while-revalidate=${resolveSwr(opts.staleWhileRevalidate ?? DEFAULT_SWR)}`,
-  ]
-  if (opts.staleIfError !== undefined) {
-    parts.push(`stale-if-error=${opts.staleIfError}`)
+export function resolveCacheLife(
+  life: CacheLife & { profile?: CacheLifeProfile } = {},
+): ResolvedCacheLife {
+  const base = cacheLifeProfiles[life.profile ?? 'default']
+  if (!base) {
+    throw new TypeError(
+      `[workersCache] Unknown cache profile "${life.profile}". ` +
+        `Available profiles: ${Object.keys(cacheLifeProfiles).join(', ')}`,
+    )
   }
-  return parts.join(', ')
+  return {
+    stale: life.stale ?? base.stale,
+    revalidate: life.revalidate ?? base.revalidate,
+    expire: life.expire ?? base.expire,
+  }
 }
 
-function resolveSwr(swr: SwrWindow): number {
-  return swr === 'unbounded' ? UNBOUNDED_SWR_SECONDS : swr
+/**
+ * Browser-facing `Cache-Control` from `stale`.
+ * `stale: 0` keeps browsers revalidating with the edge on every request
+ * (conditional 304s allowed) — purges reach users instantly.
+ */
+export function buildBrowserDirective(stale: number): string {
+  return stale > 0 ? `public, max-age=${stale}` : 'public, max-age=0, must-revalidate'
+}
+
+/**
+ * Edge-facing `CDN-Cache-Control` from `revalidate` / `expire`:
+ * fresh for `revalidate` seconds, then stale-while-revalidate until `expire`.
+ */
+export function buildEdgeDirective(life: ResolvedCacheLife, staleIfError?: number): string {
+  // 'never' means "serve stale as long as possible", not arithmetic — use the
+  // full one-year window instead of subtracting revalidate from it.
+  const swr =
+    life.expire === 'never' ? NEVER_EXPIRE_SECONDS : Math.max(0, life.expire - life.revalidate)
+  const parts = ['public', `max-age=${life.revalidate}`, `stale-while-revalidate=${swr}`]
+  if (staleIfError !== undefined) {
+    parts.push(`stale-if-error=${staleIfError}`)
+  }
+  return parts.join(', ')
 }
 
 /**

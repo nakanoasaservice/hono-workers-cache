@@ -1,11 +1,13 @@
 import { cacheTag, revalidateTag, workersCache } from 'hono-workers-cache'
 import { createRoute } from 'honox/factory'
 
-// GET /blog/:id — cached for an hour at the edge, served with SWR.
+// GET /blog/:id — the Next.js 'hours' profile with instant purges:
+// stale: 0 makes browsers revalidate with the edge every time, so the
+// POST below reaches every user immediately after the purge.
 export default createRoute(
   workersCache({
-    maxAge: 3600,
-    staleWhileRevalidate: 300,
+    profile: 'hours',
+    stale: 0,
     tags: (c) => [`post-${c.req.param('id')}`, 'posts'],
   }),
   async (c) => {

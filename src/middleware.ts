@@ -1,12 +1,21 @@
 import type { Context, MiddlewareHandler } from 'hono'
 import { routePath } from 'hono/route'
-import { BROWSER_REVALIDATE, buildEdgeDirective, formatCacheTag } from './headers.js'
-import type { WorkersCacheOptions } from './types.js'
+import {
+  buildBrowserDirective,
+  buildEdgeDirective,
+  cacheLifeProfiles,
+  formatCacheTag,
+  NEVER_EXPIRE_SECONDS,
+  resolveCacheLife,
+} from './headers.js'
+import type { CacheLife, CacheLifeProfile, WorkersCacheOptions } from './types.js'
 
 declare module 'hono' {
   interface ContextVariableMap {
     /** Accumulator for tags appended from handlers via cacheTag(). */
     __workersCacheTags?: string[]
+    /** Accumulator for lifetimes declared from handlers via cacheLife(). */
+    __workersCacheLife?: CacheLife
   }
 }
 
@@ -25,7 +34,7 @@ const isDev = () =>
  * Named after Next.js' `cacheTag` — requires a Hono Context (no async store).
  *
  * ```ts
- * export default createRoute(workersCache({ maxAge: 3600 }), async (c) => {
+ * export default createRoute(workersCache('hours'), async (c) => {
  *   const post = await getPost(c.req.param('id'))
  *   cacheTag(c, `post-${post.id}`, `author-${post.authorId}`)
  *   return c.render(<Post post={post} />)
@@ -37,18 +46,84 @@ export function cacheTag(c: Context, ...tags: string[]): void {
   c.set('__workersCacheTags', [...current, ...tags])
 }
 
+const expireSeconds = (expire: number | 'never'): number =>
+  expire === 'never' ? NEVER_EXPIRE_SECONDS : expire
+
 /**
- * Hono middleware that declares a cache policy for Cloudflare Workers Cache.
+ * Declare a cache lifetime from a handler or deeply nested code — the
+ * counterpart of Next.js' `cacheLife()`, requiring a Hono Context instead of a
+ * `use cache` scope.
+ *
+ * Accepts a profile name (`'hours'`, `'days'`, …) or a `{ stale, revalidate,
+ * expire }` object. Fields declared here override the `workersCache()`
+ * middleware's defaults; when called multiple times for one response, the
+ * **shortest value wins per field** (same rule as nested `cacheLife()` calls
+ * in Next.js).
+ *
+ * ```ts
+ * app.get('/posts/:id', workersCache('days'), async (c) => {
+ *   const post = await getPost(c.req.param('id'))
+ *   if (post.isBreakingNews) cacheLife(c, 'minutes')
+ *   return c.json(post)
+ * })
+ * ```
+ */
+export function cacheLife(c: Context, life: CacheLifeProfile | CacheLife): void {
+  const next = typeof life === 'string' ? cacheLifeProfiles[life] : life
+  if (!next) {
+    throw new TypeError(
+      `[cacheLife] Unknown cache profile "${String(life)}". ` +
+        `Available profiles: ${Object.keys(cacheLifeProfiles).join(', ')}`,
+    )
+  }
+  const current = c.get('__workersCacheLife') ?? {}
+  const merged: CacheLife = { ...current }
+  if (next.stale !== undefined) {
+    merged.stale = current.stale === undefined ? next.stale : Math.min(current.stale, next.stale)
+  }
+  if (next.revalidate !== undefined) {
+    merged.revalidate =
+      current.revalidate === undefined
+        ? next.revalidate
+        : Math.min(current.revalidate, next.revalidate)
+  }
+  if (next.expire !== undefined) {
+    merged.expire =
+      current.expire === undefined
+        ? next.expire
+        : expireSeconds(next.expire) < expireSeconds(current.expire)
+          ? next.expire
+          : current.expire
+  }
+  c.set('__workersCacheLife', merged)
+}
+
+/**
+ * Hono middleware that declares a cache policy for Cloudflare Workers Cache,
+ * in the Next.js Cache Components vocabulary (`stale` / `revalidate` /
+ * `expire`, profiles like `'hours'`).
  *
  * Workers Cache runs *in front of* the Worker, so this middleware never reads
  * or writes the cache. It only does two things:
- *   1. Declares the policy on the response (Cache-Control / CDN-Cache-Control / Cache-Tag)
+ *   1. Declares the policy on the response:
+ *      - `Cache-Control: public, max-age=<stale>` for browsers
+ *      - `CDN-Cache-Control: public, max-age=<revalidate>,
+ *         stale-while-revalidate=<expire - revalidate>` for the edge
+ *      - `Cache-Tag` for purging
  *   2. Guards against uncacheable conditions (Set-Cookie, non-GET/HEAD, error statuses)
+ *
+ * ```ts
+ * app.get('/blog/:id', workersCache('hours'), handler)          // profile
+ * app.get('/', workersCache({ profile: 'days', stale: 0 }))     // profile + override
+ * app.get('/feed', workersCache({ revalidate: 60, expire: 300 }))
+ * ```
  *
  * Prerequisite: `"cache": { "enabled": true }` in wrangler.jsonc (Wrangler >= 4.69.0)
  */
-export function workersCache(opts: WorkersCacheOptions = {}): MiddlewareHandler {
-  const strategy = opts.strategy ?? 'cdn-split'
+export function workersCache(
+  options: CacheLifeProfile | WorkersCacheOptions = {},
+): MiddlewareHandler {
+  const opts: WorkersCacheOptions = typeof options === 'string' ? { profile: options } : options
   const useRouteTag = opts.routeTag !== false
 
   return async (c, next) => {
@@ -77,16 +152,22 @@ export function workersCache(opts: WorkersCacheOptions = {}): MiddlewareHandler 
     // Respect an explicit Cache-Control set by the handler — do nothing
     if (res.headers.has('Cache-Control')) return
 
-    const edgeDirective = buildEdgeDirective(opts)
-
-    if (strategy === 'cdn-split') {
-      // Edge: serve & revalidate with SWR / browser: revalidate with the edge
-      // every time. Keeping stale copies out of browsers makes purges take
-      // effect immediately (same strategy as vinext).
-      res.headers.set('Cache-Control', BROWSER_REVALIDATE)
-      res.headers.set('CDN-Cache-Control', edgeDirective)
+    if (opts.cacheControl) {
+      // Escape hatch: one hand-written Cache-Control, verbatim, both tiers.
+      res.headers.set('Cache-Control', opts.cacheControl)
     } else {
-      res.headers.set('Cache-Control', edgeDirective)
+      // Middleware options are the default; fields declared via cacheLife()
+      // in the handler win (already shortest-merged among themselves).
+      const handlerLife = c.get('__workersCacheLife')
+      const life = resolveCacheLife({ ...opts, ...handlerLife })
+      if (isDev() && expireSeconds(life.expire) < life.revalidate) {
+        console.warn(
+          `[workersCache] ${c.req.path}: expire (${String(life.expire)}) is shorter than ` +
+            `revalidate (${life.revalidate}) — the stale-while-revalidate window is clamped to 0.`,
+        )
+      }
+      res.headers.set('Cache-Control', buildBrowserDirective(life.stale))
+      res.headers.set('CDN-Cache-Control', buildEdgeDirective(life, opts.staleIfError))
     }
 
     // Collect tags: option-provided + automatic route tag + cacheTag() additions
