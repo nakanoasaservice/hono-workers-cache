@@ -46,9 +46,16 @@ interface WorkersCacheSharedOptions {
   tags?: string[] | ((c: Context) => string[])
   /**
    * Automatically add a `route:/blog/:id`-style tag derived from the matched
-   * route pattern, enabling purges per route template. Default: true
+   * route pattern, enabling `revalidatePath('/blog/:id', 'route')`.
+   * Default: true
    */
   routeTag?: boolean
+  /**
+   * Automatically add a `path:/blog/123`-style tag with the concrete request
+   * path (query string excluded, trailing slash normalized), enabling
+   * exact-path purges via `revalidatePath('/blog/123')`. Default: true
+   */
+  pathTag?: boolean
 }
 
 /** Declare the policy as a cache lifetime (profile and/or explicit fields). */

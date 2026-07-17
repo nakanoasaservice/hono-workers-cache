@@ -6,6 +6,7 @@ import {
   cacheLifeProfiles,
   formatCacheTag,
   NEVER_EXPIRE_SECONDS,
+  normalizePath,
   resolveCacheLife,
 } from './headers.js'
 import type { CacheLife, CacheLifeProfile, WorkersCacheOptions } from './types.js'
@@ -125,6 +126,7 @@ export function workersCache(
 ): MiddlewareHandler {
   const opts: WorkersCacheOptions = typeof options === 'string' ? { profile: options } : options
   const useRouteTag = opts.routeTag !== false
+  const usePathTag = opts.pathTag !== false
 
   return async (c, next) => {
     await next()
@@ -170,7 +172,7 @@ export function workersCache(
       res.headers.set('CDN-Cache-Control', buildEdgeDirective(life, opts.staleIfError))
     }
 
-    // Collect tags: option-provided + automatic route tag + cacheTag() additions
+    // Collect tags: option-provided + automatic route/path tags + cacheTag() additions
     const collected: string[] = []
     const optTags = typeof opts.tags === 'function' ? opts.tags(c) : opts.tags
     if (optTags) collected.push(...optTags)
@@ -179,6 +181,9 @@ export function workersCache(
     const matchedRoutePath = routePath(c)
     if (useRouteTag && matchedRoutePath && matchedRoutePath !== '/*') {
       collected.push(`route:${matchedRoutePath}`)
+    }
+    if (usePathTag) {
+      collected.push(`path:${normalizePath(c.req.path)}`)
     }
     const dynamicTags = c.get('__workersCacheTags')
     if (dynamicTags) collected.push(...dynamicTags)

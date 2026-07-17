@@ -46,7 +46,7 @@ Workers Cache (2026) is an edge cache that runs **in front of** your Worker. Ena
 That shapes this package's entire design: it **never reads or writes the cache**. It only does two things:
 
 1. **Declare policy** — `workersCache()` / `cacheLife()` stamp `Cache-Control` / `CDN-Cache-Control` / `Cache-Tag` on responses
-2. **Invalidate** — `revalidateTag()` / `revalidatePath()` / `purgeEverything()` wrap [`cache.purge()`](https://developers.cloudflare.com/workers/cache/purge/) in a Next.js-`revalidateTag`-style API
+2. **Invalidate** — `revalidateTag()` / `revalidatePath()` / `revalidateEverything()` wrap [`cache.purge()`](https://developers.cloudflare.com/workers/cache/purge/) in a Next.js-`revalidateTag`-style API
 
 ### Not the same as `hono/cache`
 
@@ -88,7 +88,7 @@ Enable Workers Cache in your Wrangler configuration (Wrangler >= 4.69.0). This i
 
 ```ts
 import { Hono } from 'hono'
-import { cacheLife, noCache, revalidateTag, workersCache } from 'hono-workers-cache'
+import { cacheLife, noCache, revalidatePath, workersCache } from 'hono-workers-cache'
 
 const app = new Hono()
 
@@ -113,8 +113,9 @@ app.get('/admin', noCache(), (c) => c.text('admin'))
 
 // Invalidate after a mutation
 app.post('/posts/:id', async (c) => {
-  await update(c.req.param('id'))
-  await revalidateTag('route:/posts/:id', c)
+  const id = c.req.param('id')
+  await update(id)
+  await revalidatePath(`/posts/${id}`, c) // exact path
   return c.json({ ok: true })
 })
 ```
@@ -173,7 +174,14 @@ export const POST = createRoute(async (c) => {
 })
 ```
 
-`revalidatePath('/blog/')` and `purgeEverything()` work the same way. Outside the Workers runtime (Node during dev, tests) the helpers become a no-op resolving to `{ ok: false, reason: 'cache-unavailable' }` — they never throw and never break dev.
+`revalidatePath()` and `revalidateEverything()` work the same way. Outside the Workers runtime (Node during dev, tests) the helpers become a no-op resolving to `{ ok: false, reason: 'cache-unavailable' }` — they never throw and never break dev.
+
+```ts
+await revalidatePath('/blog/post-1')          // exact path (path: tag)
+await revalidatePath('/blog/:id', 'route')    // every URL the route produced (route: tag)
+await revalidatePath('/blog/', 'prefix')      // everything under /blog/ (Cloudflare pathPrefixes)
+await revalidateEverything()                  // the whole entrypoint cache
+```
 
 ## The cache model
 
@@ -190,7 +198,7 @@ So `workersCache('hours')` (stale 5 min / revalidate 1 hour / expire 1 day) emit
 ```
 Cache-Control:     public, max-age=300                                ← browsers
 CDN-Cache-Control: public, max-age=3600, stale-while-revalidate=82800 ← edge
-Cache-Tag:         route:/posts/:id
+Cache-Tag:         route:/posts/:id,path:/posts/123
 ```
 
 Within `revalidate` the edge serves instantly; past it, the edge keeps serving stale while regenerating in the background (exactly Next.js' behavior, implemented by the CDN's SWR); past `expire`, the request blocks and fetches fresh. Browsers hold a copy for at most `stale` seconds before checking back with the edge.
@@ -234,10 +242,11 @@ Accepts a profile name (`workersCache('hours')`) or an options object. With no a
 | `expire` | `number \| 'never'` | from profile | Max total lifetime; past it, the edge blocks and fetches fresh. `'never'` = one year |
 | `staleIfError` | `number` | — | Serve stale for this many seconds when the origin returns 5xx |
 | `tags` | `string[] \| (c: Context) => string[]` | — | `Cache-Tag` values; a function is evaluated per request |
-| `routeTag` | `boolean` | `true` | Auto-add a `route:/blog/:id` tag from the matched route pattern |
+| `routeTag` | `boolean` | `true` | Auto-add a `route:/blog/:id` tag from the matched route pattern, enabling `revalidatePath(path, 'route')` |
+| `pathTag` | `boolean` | `true` | Auto-add a `path:/blog/123` tag with the concrete request path (query excluded, trailing slash normalized), enabling exact-path `revalidatePath(path)` |
 | `cacheControl` | `string` | — | Escape hatch: emitted **verbatim** as the single `Cache-Control` (no `CDN-Cache-Control`). **Mutually exclusive** with the lifetime options (`profile` / `stale` / `revalidate` / `expire` / `staleIfError`) — the type forbids combining them |
 
-Explicit fields override the profile, e.g. `{ profile: 'days', stale: 0 }` = daily content with instant purges. `tags` / `routeTag` combine with either variant.
+Explicit fields override the profile, e.g. `{ profile: 'days', stale: 0 }` = daily content with instant purges. `tags` / `routeTag` / `pathTag` combine with either variant. The `route:` and `path:` tag prefixes are reserved by the automatic tags — avoid them in your own `tags` / `cacheTag()` values.
 
 The middleware **leaves the response untouched** when any of these hold:
 
@@ -252,7 +261,7 @@ The counterpart of Next.js' `cacheLife()` — declare a lifetime from a handler 
 
 ### `cacheTag(c, ...tags): void`
 
-Append tags to the response from a handler or deeply nested code. Merged with `tags` / `routeTag` output by the middleware. Same name as Next.js' `cacheTag`, but requires a Hono `Context` (no async local store).
+Append tags to the response from a handler or deeply nested code. Merged with the middleware's `tags` and automatic `route:` / `path:` tags. Same name as Next.js' `cacheTag`, but requires a Hono `Context` (no async local store).
 
 ### `noCache(): MiddlewareHandler`
 
@@ -260,12 +269,12 @@ Sets `Cache-Control: no-store` **and deletes** any upstream-stamped `CDN-Cache-C
 
 ### Purge helpers
 
-Named after Next.js (`revalidateTag` / `revalidatePath`), with Workers Cache semantics: arrays are accepted for batch purge, `c` is optional, and results are `Promise<PurgeResult>` (not `void`). `revalidatePath` matches Cloudflare **path prefixes**, not App Router `page` / `layout` types.
+Named after Next.js (`revalidateTag` / `revalidatePath`), with Workers Cache semantics: arrays are accepted for batch purge, `c` is optional, and results are `Promise<PurgeResult>` (not `void`).
 
 ```ts
 revalidateTag(tags: string | string[], c?: Context): Promise<PurgeResult>
-revalidatePath(prefixes: string | string[], c?: Context): Promise<PurgeResult>
-purgeEverything(c?: Context): Promise<PurgeResult>
+revalidatePath(paths: string | string[], type?: 'route' | 'prefix', c?: Context): Promise<PurgeResult>
+revalidateEverything(c?: Context): Promise<PurgeResult>
 
 interface PurgeResult {
   ok: boolean
@@ -274,7 +283,26 @@ interface PurgeResult {
 }
 ```
 
+`revalidatePath` has three modes, mirroring Next.js' `revalidatePath(path, type?)` in Hono terms:
+
+| Call | Next.js counterpart | Purges |
+| --- | --- | --- |
+| `revalidatePath('/blog/post-1')` | `revalidatePath('/blog/post-1')` | The `path:` tag — exactly that path, all query-string variants together. Requires `pathTag` (default on) |
+| `revalidatePath('/blog/:id', 'route')` | `revalidatePath('/blog/[slug]', 'page')` | The `route:` tag — every URL that Hono route produced. Requires `routeTag` (default on); with `routeTag: false` the purge silently matches nothing |
+| `revalidatePath('/blog/', 'prefix')` | `revalidatePath('/blog', 'layout')` | Cloudflare `pathPrefixes` — every cached path starting with the prefix. A pure string prefix: `/blog` also matches `/blogger`, so end directory prefixes with `/` |
+
+Like Next.js' `revalidatePath`, all of this reaches only the server-side (edge) cache — browsers keep their copy until `stale` runs out ([see `stale` and instant purges](#stale-and-instant-purges)). Tag purges also only affect entries cached *after* the middleware started emitting that tag — mind the transition right after enabling `pathTag` / `routeTag` or upgrading.
+
 Runtime resolution order: duck-typed `c.executionCtx.cache` → dynamic `import('cloudflare:workers')` → no-op `{ ok: false, reason: 'cache-unavailable' }`. Passing an empty array resolves `{ ok: true }` immediately without touching the cache. `purge()` failures — both rejections and resolved `{ success: false }` results (e.g. rate limiting) — map to `{ ok: false, reason: 'purge-failed', error }`.
+
+## Migrating from 0.3.x
+
+| 0.3.x | Now |
+| --- | --- |
+| `revalidatePath('/blog/')` (path-prefix purge) | `revalidatePath('/blog/', 'prefix')` — the default is now an **exact-path** tag purge |
+| `purgeEverything()` | `revalidateEverything()` |
+
+The middleware also emits one extra automatic tag per response (`path:<request path>`); disable with `pathTag: false`.
 
 ## Migrating from 0.2.x
 

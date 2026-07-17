@@ -4,8 +4,27 @@ import {
   buildEdgeDirective,
   cacheLifeProfiles,
   formatCacheTag,
+  normalizePath,
   resolveCacheLife,
 } from '../src/index.js'
+
+describe('normalizePath', () => {
+  it('strips query strings and hashes', () => {
+    expect(normalizePath('/docs?page=2')).toBe('/docs')
+    expect(normalizePath('/docs#intro')).toBe('/docs')
+    expect(normalizePath('/docs?page=2#intro')).toBe('/docs')
+  })
+
+  it('removes trailing slashes except for the root', () => {
+    expect(normalizePath('/blog/post-1/')).toBe('/blog/post-1')
+    expect(normalizePath('/blog//')).toBe('/blog')
+    expect(normalizePath('/')).toBe('/')
+  })
+
+  it('enforces a leading slash', () => {
+    expect(normalizePath('about')).toBe('/about')
+  })
+})
 
 describe('resolveCacheLife', () => {
   it("falls back to the 'default' profile (Next.js: stale 5 min / revalidate 15 min / expire never)", () => {

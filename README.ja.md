@@ -48,7 +48,7 @@ Workers Cache(2026 年登場)は Worker の**前段**で動くエッジキャッ
 この事実がパッケージ全体の設計を規定します。このパッケージは**キャッシュを読み書きしません**。仕事は 2 つだけです。
 
 1. **ポリシー宣言** — `workersCache()` / `cacheLife()` がレスポンスに `Cache-Control` / `CDN-Cache-Control` / `Cache-Tag` を付与
-2. **無効化** — `revalidateTag()` / `revalidatePath()` / `purgeEverything()` が [`cache.purge()`](https://developers.cloudflare.com/workers/cache/purge/) を Next.js の `revalidateTag` 風 API で抽象化
+2. **無効化** — `revalidateTag()` / `revalidatePath()` / `revalidateEverything()` が [`cache.purge()`](https://developers.cloudflare.com/workers/cache/purge/) を Next.js の `revalidateTag` 風 API で抽象化
 
 ### `hono/cache` との違い
 
@@ -90,7 +90,7 @@ Wrangler 設定で Workers Cache を有効化します(Wrangler >= 4.69.0)。こ
 
 ```ts
 import { Hono } from 'hono'
-import { cacheLife, noCache, revalidateTag, workersCache } from 'hono-workers-cache'
+import { cacheLife, noCache, revalidatePath, workersCache } from 'hono-workers-cache'
 
 const app = new Hono()
 
@@ -115,8 +115,9 @@ app.get('/admin', noCache(), (c) => c.text('admin'))
 
 // 更新後に無効化
 app.post('/posts/:id', async (c) => {
-  await update(c.req.param('id'))
-  await revalidateTag('route:/posts/:id', c)
+  const id = c.req.param('id')
+  await update(id)
+  await revalidatePath(`/posts/${id}`, c) // 完全一致パス
   return c.json({ ok: true })
 })
 ```
@@ -175,7 +176,14 @@ export const POST = createRoute(async (c) => {
 })
 ```
 
-`revalidatePath('/blog/')`、`purgeEverything()` も同様です。Workers ランタイム外(Node での dev、テスト)では `{ ok: false, reason: 'cache-unavailable' }` を返す no-op になり、throw せず開発を壊しません。
+`revalidatePath()`、`revalidateEverything()` も同様です。Workers ランタイム外(Node での dev、テスト)では `{ ok: false, reason: 'cache-unavailable' }` を返す no-op になり、throw せず開発を壊しません。
+
+```ts
+await revalidatePath('/blog/post-1')          // 完全一致パス(path: タグ)
+await revalidatePath('/blog/:id', 'route')    // そのルートが生成した全 URL(route: タグ)
+await revalidatePath('/blog/', 'prefix')      // /blog/ 配下すべて(Cloudflare pathPrefixes)
+await revalidateEverything()                  // エントリポイントのキャッシュ全体
+```
 
 ## キャッシュモデル
 
@@ -192,7 +200,7 @@ export const POST = createRoute(async (c) => {
 ```
 Cache-Control:     public, max-age=300                                ← ブラウザ
 CDN-Cache-Control: public, max-age=3600, stale-while-revalidate=82800 ← エッジ
-Cache-Tag:         route:/posts/:id
+Cache-Tag:         route:/posts/:id,path:/posts/123
 ```
 
 `revalidate` 以内はエッジが即答。過ぎたら stale を配信しつつバックグラウンドで再生成(まさに Next.js の挙動を CDN の SWR で実装)。`expire` を過ぎたらブロッキングで新規取得します。ブラウザは最長 `stale` 秒だけ手元のコピーを使い、その後エッジに確認しに来ます。
@@ -236,10 +244,11 @@ app.get('/news/:id', workersCache({ profile: 'days', stale: 0 }), handler)
 | `expire` | `number \| 'never'` | プロファイル値 | 総寿命の上限。過ぎたらブロッキングで新規取得。`'never'` = 1 年 |
 | `staleIfError` | `number` | — | オリジンが 5xx を返した際に stale を配信する秒数 |
 | `tags` | `string[] \| (c: Context) => string[]` | — | `Cache-Tag` の値。関数はリクエストごとに評価 |
-| `routeTag` | `boolean` | `true` | マッチしたルートパターンから `route:/blog/:id` タグを自動付与 |
+| `routeTag` | `boolean` | `true` | マッチしたルートパターンから `route:/blog/:id` タグを自動付与。`revalidatePath(path, 'route')` を可能にする |
+| `pathTag` | `boolean` | `true` | 実際のリクエストパスから `path:/blog/123` タグを自動付与(クエリ除外、末尾スラッシュ正規化)。完全一致の `revalidatePath(path)` を可能にする |
 | `cacheControl` | `string` | — | エスケープハッチ。単一の `Cache-Control` として **verbatim** で出力(`CDN-Cache-Control` は出力しない)。寿命系オプション(`profile` / `stale` / `revalidate` / `expire` / `staleIfError`)とは**排他** — 型レベルで併用を禁止 |
 
-明示したフィールドはプロファイルより優先されます。例: `{ profile: 'days', stale: 0 }` = 日次コンテンツ + purge 即時反映。`tags` / `routeTag` はどちらの形とも併用できます。
+明示したフィールドはプロファイルより優先されます。例: `{ profile: 'days', stale: 0 }` = 日次コンテンツ + purge 即時反映。`tags` / `routeTag` / `pathTag` はどちらの形とも併用できます。`route:` / `path:` プレフィックスは自動タグの予約領域なので、自前の `tags` / `cacheTag()` では避けてください。
 
 以下のいずれかに該当する場合、ミドルウェアは**レスポンスに一切触れません**。
 
@@ -254,7 +263,7 @@ Next.js の `cacheLife()` に対応 — ハンドラや深い階層のコード�
 
 ### `cacheTag(c, ...tags): void`
 
-ハンドラや深い階層のコードからレスポンスにタグを追記します。ミドルウェアの `tags` / `routeTag` の出力とマージされます。Next.js の `cacheTag` と同じ名前ですが、Hono の `Context` が必要です(async local store はありません)。
+ハンドラや深い階層のコードからレスポンスにタグを追記します。ミドルウェアの `tags` と自動の `route:` / `path:` タグにマージされます。Next.js の `cacheTag` と同じ名前ですが、Hono の `Context` が必要です(async local store はありません)。
 
 ### `noCache(): MiddlewareHandler`
 
@@ -262,12 +271,12 @@ Next.js の `cacheLife()` に対応 — ハンドラや深い階層のコード�
 
 ### purge ヘルパー
 
-名前は Next.js(`revalidateTag` / `revalidatePath`)に合わせていますが、意味は Workers Cache です。配列での一括 purge、省略可能な `c`、戻り値は `Promise<PurgeResult>`(`void` ではない)。`revalidatePath` は Cloudflare の **path prefix** purge で、App Router の `page` / `layout` ではありません。
+名前は Next.js(`revalidateTag` / `revalidatePath`)に合わせていますが、意味は Workers Cache です。配列での一括 purge、省略可能な `c`、戻り値は `Promise<PurgeResult>`(`void` ではない)。
 
 ```ts
 revalidateTag(tags: string | string[], c?: Context): Promise<PurgeResult>
-revalidatePath(prefixes: string | string[], c?: Context): Promise<PurgeResult>
-purgeEverything(c?: Context): Promise<PurgeResult>
+revalidatePath(paths: string | string[], type?: 'route' | 'prefix', c?: Context): Promise<PurgeResult>
+revalidateEverything(c?: Context): Promise<PurgeResult>
 
 interface PurgeResult {
   ok: boolean
@@ -276,7 +285,26 @@ interface PurgeResult {
 }
 ```
 
+`revalidatePath` は Next.js の `revalidatePath(path, type?)` を Hono の語彙に読み替えた 3 モードを持ちます。
+
+| 呼び出し | Next.js の対応物 | purge されるもの |
+| --- | --- | --- |
+| `revalidatePath('/blog/post-1')` | `revalidatePath('/blog/post-1')` | `path:` タグ — そのパスだけ(クエリ文字列バリアントはまとめて)。ミドルウェアの `pathTag`(デフォルト有効)が前提 |
+| `revalidatePath('/blog/:id', 'route')` | `revalidatePath('/blog/[slug]', 'page')` | `route:` タグ — その Hono ルートが生成した全 URL。`routeTag`(デフォルト有効)が前提。`routeTag: false` だと何にもマッチせず静かに空振りする |
+| `revalidatePath('/blog/', 'prefix')` | `revalidatePath('/blog', 'layout')` | Cloudflare `pathPrefixes` — プレフィックスで始まる全パス。純粋な文字列プレフィックスなので `/blog` は `/blogger` にもマッチする。ディレクトリは `/` で終わらせること |
+
+Next.js の `revalidatePath` と同様、届くのは**サーバー側(エッジ)のキャッシュだけ**です — ブラウザは `stale` が切れるまで手元のコピーを使い続けます([`stale` と purge の即時性](#stale-と-purge-の即時性)参照)。またタグ purge が効くのは、ミドルウェアがそのタグを出力し始めた*後*にキャッシュされたエントリのみです — `pathTag` / `routeTag` の有効化直後やアップグレード直後の移行期に注意してください。
+
 ランタイム解決の順序: `c.executionCtx.cache` の duck typing → `import('cloudflare:workers')` の動的 import → どちらも不可なら `{ ok: false, reason: 'cache-unavailable' }` の no-op。空配列を渡すとキャッシュに触れず即座に `{ ok: true }` で解決します。`purge()` の失敗は、reject と、解決値の `{ success: false }`(レート制限など)の両方を `{ ok: false, reason: 'purge-failed', error }` にマップします。
+
+## 0.3.x からの移行
+
+| 0.3.x | 現在 |
+| --- | --- |
+| `revalidatePath('/blog/')`(path-prefix purge) | `revalidatePath('/blog/', 'prefix')` — デフォルトは**完全一致パス**のタグ purge に変更 |
+| `purgeEverything()` | `revalidateEverything()` |
+
+またミドルウェアが自動タグを 1 本追加で出力するようになりました(`path:<リクエストパス>`)。`pathTag: false` で無効化できます。
 
 ## 0.2.x からの移行
 

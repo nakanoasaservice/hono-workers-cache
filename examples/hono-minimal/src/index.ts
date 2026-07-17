@@ -3,7 +3,8 @@ import {
   cacheLife,
   cacheTag,
   noCache,
-  purgeEverything,
+  revalidateEverything,
+  revalidatePath,
   revalidateTag,
   workersCache,
 } from 'hono-workers-cache'
@@ -41,12 +42,20 @@ app.post('/posts/:id', async (c) => {
   return c.json({ updated: id, purge: result })
 })
 
+// Or purge by path — exact, per-route, or by prefix.
+app.post('/admin/purge-paths', async (c) => {
+  await revalidatePath('/posts/breaking', c) // exactly this path
+  await revalidatePath('/posts/:id', 'route', c) // every URL this route produced
+  await revalidatePath('/api/', 'prefix', c) // everything under /api/
+  return c.json({ ok: true })
+})
+
 // Never cached; also strips cache headers stamped upstream.
 app.get('/admin', noCache(), (c) => c.text('admin'))
 
 // Nuke the whole cache for this Worker entrypoint (use sparingly).
 app.post('/admin/purge-all', async (c) => {
-  const result = await purgeEverything(c)
+  const result = await revalidateEverything(c)
   return c.json(result)
 })
 
