@@ -13,6 +13,8 @@ export type {
   CacheLifeProfile,
   PurgeResult,
   ResolvedCacheLife,
+  WorkersCacheControlOptions,
+  WorkersCacheLifeOptions,
   WorkersCacheLike,
   WorkersCacheOptions,
 } from './types.js'

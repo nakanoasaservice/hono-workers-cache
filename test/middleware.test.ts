@@ -170,6 +170,18 @@ describe('workersCache — cacheControl escape hatch', () => {
     expect(res.headers.get('Cache-Control')).toBe('s-maxage=300, max-age=0')
     expect(res.headers.get('CDN-Cache-Control')).toBeNull()
   })
+
+  it('forbids combining cacheControl with lifetime options at the type level', () => {
+    // @ts-expect-error -- cacheControl is mutually exclusive with revalidate
+    workersCache({ cacheControl: 's-maxage=300', revalidate: 60 })
+    // @ts-expect-error -- cacheControl is mutually exclusive with profile
+    workersCache({ cacheControl: 's-maxage=300', profile: 'hours' })
+    // @ts-expect-error -- cacheControl is mutually exclusive with staleIfError
+    workersCache({ cacheControl: 's-maxage=300', staleIfError: 600 })
+    // tags/routeTag remain allowed alongside cacheControl
+    workersCache({ cacheControl: 's-maxage=300', tags: ['a'], routeTag: false })
+    expect(true).toBe(true)
+  })
 })
 
 describe('workersCache — hands-off conditions', () => {

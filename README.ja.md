@@ -235,9 +235,9 @@ export const POST = createRoute(async (c) => {
 | `staleIfError` | `number` | — | オリジンが 5xx を返した際に stale を配信する秒数 |
 | `tags` | `string[] \| (c: Context) => string[]` | — | `Cache-Tag` の値。関数はリクエストごとに評価 |
 | `routeTag` | `boolean` | `true` | マッチしたルートパターンから `route:/blog/:id` タグを自動付与 |
-| `cacheControl` | `string` | — | エスケープハッチ。寿命オプションを無視し、単一の `Cache-Control` として **verbatim** で出力(`CDN-Cache-Control` は出力しない) |
+| `cacheControl` | `string` | — | エスケープハッチ。単一の `Cache-Control` として **verbatim** で出力(`CDN-Cache-Control` は出力しない)。寿命系オプション(`profile` / `stale` / `revalidate` / `expire` / `staleIfError`)とは**排他** — 型レベルで併用を禁止 |
 
-明示したフィールドはプロファイルより優先されます。例: `{ profile: 'days', stale: 0 }` = 日次コンテンツ + purge 即時反映。
+明示したフィールドはプロファイルより優先されます。例: `{ profile: 'days', stale: 0 }` = 日次コンテンツ + purge 即時反映。`tags` / `routeTag` はどちらの形とも併用できます。
 
 以下のいずれかに該当する場合、ミドルウェアは**レスポンスに一切触れません**。
 

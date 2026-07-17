@@ -37,16 +37,8 @@ export interface CacheLife {
 /** A `CacheLife` with every field filled in (profile defaults applied). */
 export type ResolvedCacheLife = Required<CacheLife>
 
-export interface WorkersCacheOptions extends CacheLife {
-  /**
-   * Base profile — same names and values as Next.js. Explicit `stale` /
-   * `revalidate` / `expire` fields override the profile's values, e.g.
-   * `{ profile: 'days', stale: 0 }` = daily content with instant purges.
-   * Default: 'default' (stale 5 min / revalidate 15 min / expire never).
-   */
-  profile?: CacheLifeProfile
-  /** stale-if-error window in seconds. Serves stale content when the origin returns 5xx. */
-  staleIfError?: number
+/** Options shared by both `workersCache()` variants. */
+interface WorkersCacheSharedOptions {
   /**
    * Tags to emit in `Cache-Tag`. Pass a function to evaluate per request
    * (e.g. tags derived from path parameters).
@@ -57,16 +49,44 @@ export interface WorkersCacheOptions extends CacheLife {
    * route pattern, enabling purges per route template. Default: true
    */
   routeTag?: boolean
+}
+
+/** Declare the policy as a cache lifetime (profile and/or explicit fields). */
+export interface WorkersCacheLifeOptions extends WorkersCacheSharedOptions, CacheLife {
   /**
-   * Escape hatch for hand-writing the policy. When set, the string is emitted
-   * as the single `Cache-Control` header **verbatim, with no processing
-   * whatsoever** (no `CDN-Cache-Control` is emitted), and the lifetime options
-   * are ignored. Tags are still emitted.
+   * Base profile — same names and values as Next.js. Explicit `stale` /
+   * `revalidate` / `expire` fields override the profile's values, e.g.
+   * `{ profile: 'days', stale: 0 }` = daily content with instant purges.
+   * Default: 'default' (stale 5 min / revalidate 15 min / expire never).
+   */
+  profile?: CacheLifeProfile
+  /** stale-if-error window in seconds. Serves stale content when the origin returns 5xx. */
+  staleIfError?: number
+  cacheControl?: never
+}
+
+/**
+ * Escape hatch: hand-write the policy instead of declaring a lifetime.
+ * Mutually exclusive with the lifetime options — the type forbids combining
+ * them, because the string would silently win.
+ */
+export interface WorkersCacheControlOptions extends WorkersCacheSharedOptions {
+  /**
+   * Emitted as the single `Cache-Control` header **verbatim, with no
+   * processing whatsoever** (no `CDN-Cache-Control` is emitted). Tags are
+   * still emitted.
    * Note: Cloudflare treats a value-less `stale-while-revalidate` as a
    * zero-width window (RFC 5861) — always spell out the seconds.
    */
-  cacheControl?: string
+  cacheControl: string
+  profile?: never
+  stale?: never
+  revalidate?: never
+  expire?: never
+  staleIfError?: never
 }
+
+export type WorkersCacheOptions = WorkersCacheLifeOptions | WorkersCacheControlOptions
 
 /** The purge surface of `ctx.cache` / `cloudflare:workers`' cache (for duck typing). */
 export interface WorkersCacheLike {

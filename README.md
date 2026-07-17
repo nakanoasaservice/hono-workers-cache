@@ -233,9 +233,9 @@ Accepts a profile name (`workersCache('hours')`) or an options object. With no a
 | `staleIfError` | `number` | — | Serve stale for this many seconds when the origin returns 5xx |
 | `tags` | `string[] \| (c: Context) => string[]` | — | `Cache-Tag` values; a function is evaluated per request |
 | `routeTag` | `boolean` | `true` | Auto-add a `route:/blog/:id` tag from the matched route pattern |
-| `cacheControl` | `string` | — | Escape hatch: emitted **verbatim** as the single `Cache-Control` (no `CDN-Cache-Control`), ignoring the lifetime options |
+| `cacheControl` | `string` | — | Escape hatch: emitted **verbatim** as the single `Cache-Control` (no `CDN-Cache-Control`). **Mutually exclusive** with the lifetime options (`profile` / `stale` / `revalidate` / `expire` / `staleIfError`) — the type forbids combining them |
 
-Explicit fields override the profile, e.g. `{ profile: 'days', stale: 0 }` = daily content with instant purges.
+Explicit fields override the profile, e.g. `{ profile: 'days', stale: 0 }` = daily content with instant purges. `tags` / `routeTag` combine with either variant.
 
 The middleware **leaves the response untouched** when any of these hold:
 
