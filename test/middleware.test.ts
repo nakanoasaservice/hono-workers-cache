@@ -89,6 +89,18 @@ describe('workersCache — split headers from one cacheLife', () => {
     expect(res.headers.get('Cache-Tag')).toBe('route:/blog/:id,path:/blog/123')
   })
 
+  it('includes the mount prefix in route/path tags for sub-apps mounted via app.route()', async () => {
+    // routePath() resolves to the merged pattern (mount prefix included) —
+    // verified against hono 4.8.0 (peer dep lower bound) and current.
+    const api = new Hono()
+    api.get('/posts/:id', workersCache('hours'), (c) => c.text('post'))
+    const app = new Hono()
+    app.route('/api', api)
+
+    const res = await app.request('/api/posts/123')
+    expect(res.headers.get('Cache-Tag')).toBe('route:/api/posts/:id,path:/api/posts/123')
+  })
+
   it('does not add a route tag for a bare wildcard route (path tag remains)', async () => {
     const app = new Hono()
     app.get('/*', workersCache('hours'), (c) => c.text('w'))
