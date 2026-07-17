@@ -79,6 +79,23 @@ export function buildEdgeDirective(life: ResolvedCacheLife, staleIfError?: numbe
 }
 
 /**
+ * Normalize a concrete request path for `path:` tagging, so the tag the
+ * middleware stamps and the tag `revalidatePath()` purges always agree:
+ * query/hash stripped, leading slash enforced, trailing slashes removed
+ * (except for the root `/`).
+ */
+export function normalizePath(path: string): string {
+  let p = path
+  const hash = p.indexOf('#')
+  if (hash !== -1) p = p.slice(0, hash)
+  const query = p.indexOf('?')
+  if (query !== -1) p = p.slice(0, query)
+  if (!p.startsWith('/')) p = `/${p}`
+  while (p.length > 1 && p.endsWith('/')) p = p.slice(0, -1)
+  return p
+}
+
+/**
  * Build a `Cache-Tag` header value from an array of tags.
  * Tags containing commas or exceeding the size limit are skipped, and the
  * whole header is kept within the byte budget.

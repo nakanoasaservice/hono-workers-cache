@@ -25,7 +25,9 @@ describe('workersCache — split headers from one cacheLife', () => {
     expect(res.headers.get('CDN-Cache-Control')).toBe(
       'public, max-age=3600, stale-while-revalidate=300',
     )
-    expect(res.headers.get('Cache-Tag')).toBe('post-123,posts,route:/blog/:id,from-handler')
+    expect(res.headers.get('Cache-Tag')).toBe(
+      'post-123,posts,route:/blog/:id,path:/blog/123,from-handler',
+    )
   })
 
   it("applies the 'default' profile when called with no options (Next.js values)", async () => {
@@ -37,7 +39,7 @@ describe('workersCache — split headers from one cacheLife', () => {
     expect(res.headers.get('CDN-Cache-Control')).toBe(
       'public, max-age=900, stale-while-revalidate=31536000',
     )
-    expect(res.headers.get('Cache-Tag')).toBe('route:/defaults')
+    expect(res.headers.get('Cache-Tag')).toBe('route:/defaults,path:/defaults')
   })
 
   it('accepts a profile name as the sole argument', async () => {
@@ -84,14 +86,50 @@ describe('workersCache — split headers from one cacheLife', () => {
     app.get('/blog/:id', (c) => c.text('post'))
 
     const res = await app.request('/blog/123')
-    expect(res.headers.get('Cache-Tag')).toBe('route:/blog/:id')
+    expect(res.headers.get('Cache-Tag')).toBe('route:/blog/:id,path:/blog/123')
   })
 
-  it('does not add a route tag for a bare wildcard route', async () => {
+  it('includes the mount prefix in route/path tags for sub-apps mounted via app.route()', async () => {
+    // routePath() resolves to the merged pattern (mount prefix included) —
+    // verified against hono 4.8.0 (peer dep lower bound) and current.
+    const api = new Hono()
+    api.get('/posts/:id', workersCache('hours'), (c) => c.text('post'))
+    const app = new Hono()
+    app.route('/api', api)
+
+    const res = await app.request('/api/posts/123')
+    expect(res.headers.get('Cache-Tag')).toBe('route:/api/posts/:id,path:/api/posts/123')
+  })
+
+  it('does not add a route tag for a bare wildcard route (path tag remains)', async () => {
     const app = new Hono()
     app.get('/*', workersCache('hours'), (c) => c.text('w'))
 
     const res = await app.request('/anything')
+    expect(res.headers.get('Cache-Tag')).toBe('path:/anything')
+  })
+
+  it('normalizes the path tag (trailing slash) — the route tag stays verbatim', async () => {
+    const app = new Hono()
+    app.get('/docs/:page/', workersCache('hours'), (c) => c.text('doc'))
+
+    const res = await app.request('/docs/intro/?theme=dark')
+    expect(res.headers.get('Cache-Tag')).toBe('route:/docs/:page/,path:/docs/intro')
+  })
+
+  it('omits the path tag with pathTag: false', async () => {
+    const app = new Hono()
+    app.get('/no-path-tag', workersCache({ pathTag: false }), (c) => c.text('n'))
+
+    const res = await app.request('/no-path-tag')
+    expect(res.headers.get('Cache-Tag')).toBe('route:/no-path-tag')
+  })
+
+  it('emits no Cache-Tag when both automatic tags are disabled', async () => {
+    const app = new Hono()
+    app.get('/bare', workersCache({ routeTag: false, pathTag: false }), (c) => c.text('b'))
+
+    const res = await app.request('/bare')
     expect(res.headers.get('Cache-Tag')).toBeNull()
   })
 })

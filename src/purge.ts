@@ -1,4 +1,5 @@
 import type { Context } from 'hono'
+import { normalizePath } from './headers.js'
 import type { PurgeResult, WorkersCacheLike } from './types.js'
 
 /**
@@ -89,18 +90,57 @@ export function revalidateTag(tags: string | string[], c?: Context): Promise<Pur
   return doPurge({ tags: list }, c)
 }
 
+/** How `revalidatePath` interprets its paths. Default (omitted) = exact path. */
+export type RevalidatePathType = 'route' | 'prefix'
+
 /**
- * Invalidate by path prefix via `cache.purge({ pathPrefixes })`. Named after
- * Next.js' `revalidatePath`, but matches Cloudflare path-prefix purge (not
- * App Router page/layout types).
+ * Invalidate cached responses for a path — Next.js' `revalidatePath`, mapped
+ * onto Workers Cache. Three modes:
+ *
+ * - `revalidatePath('/blog/post-1')` — **exact path**. Purges the
+ *   `path:<normalized path>` tag that `workersCache()` stamps on every
+ *   response (all query-string variants of the path go together). Requires
+ *   the middleware's `pathTag` (default on).
+ * - `revalidatePath('/blog/:id', 'route')` — **Hono route template** (the
+ *   counterpart of Next.js' `type: 'page'`). Purges the `route:<template>`
+ *   tag, i.e. every URL that route produced. Requires `routeTag` (default
+ *   on) — with `routeTag: false` the purge silently matches nothing.
+ * - `revalidatePath('/blog/', 'prefix')` — **path prefix**, via Cloudflare
+ *   `pathPrefixes` (the counterpart of `type: 'layout'`). A pure string
+ *   prefix: `/blog` also matches `/blogger`, so end directory prefixes
+ *   with `/`.
+ *
+ * Like Next.js' `revalidatePath`, this only reaches the server-side (edge)
+ * cache — browsers keep serving their own copy until `stale` runs out. Use
+ * `stale: 0` on routes whose purges must reach users instantly.
+ *
+ * The tag purges only affect entries cached *after* the middleware started
+ * emitting the corresponding tag — mind this right after upgrading.
  */
-export function revalidatePath(prefixes: string | string[], c?: Context): Promise<PurgeResult> {
-  const list = (Array.isArray(prefixes) ? prefixes : [prefixes]).filter((p) => p.length > 0)
+export function revalidatePath(paths: string | string[], c?: Context): Promise<PurgeResult>
+export function revalidatePath(
+  paths: string | string[],
+  type: RevalidatePathType,
+  c?: Context,
+): Promise<PurgeResult>
+export function revalidatePath(
+  paths: string | string[],
+  typeOrContext?: RevalidatePathType | Context,
+  context?: Context,
+): Promise<PurgeResult> {
+  const type = typeof typeOrContext === 'string' ? typeOrContext : undefined
+  const c = typeof typeOrContext === 'string' ? context : typeOrContext
+  const list = (Array.isArray(paths) ? paths : [paths]).filter((p) => p.length > 0)
   if (list.length === 0) return Promise.resolve({ ok: true })
-  return doPurge({ pathPrefixes: list }, c)
+  if (type === 'prefix') return doPurge({ pathPrefixes: list }, c)
+  if (type === 'route') return doPurge({ tags: list.map((p) => `route:${p}`) }, c)
+  return doPurge({ tags: list.map((p) => `path:${normalizePath(p)}`) }, c)
 }
 
-/** Purge everything cached by the calling entrypoint. */
-export function purgeEverything(c?: Context): Promise<PurgeResult> {
+/**
+ * Purge everything cached by the calling entrypoint — the counterpart of
+ * Next.js' `revalidatePath('/', 'layout')`.
+ */
+export function revalidateEverything(c?: Context): Promise<PurgeResult> {
   return doPurge({ purgeEverything: true }, c)
 }
