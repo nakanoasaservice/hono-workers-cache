@@ -34,9 +34,6 @@ jobs:
       - name: Install Dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build
-        run: pnpm build
-
       - name: Publish to npm
         run: |
           VERSION=$(jq -r .version package.json)
