@@ -1,26 +1,35 @@
 import { Hono } from 'hono'
-import { cacheTag, noCache, purgeEverything, revalidateTag, workersCache } from 'hono-workers-cache'
+import {
+  cacheLife,
+  cacheTag,
+  noCache,
+  purgeEverything,
+  revalidateTag,
+  workersCache,
+} from 'hono-workers-cache'
 
 const app = new Hono()
 
-// Cached route: the edge serves this with stale-while-revalidate, browsers
-// revalidate with the edge on every request (default 'cdn-split' strategy).
+// Cached route with the Next.js 'hours' profile:
+//   browsers reuse for 5 min (stale), the edge stays fresh for 1 hour
+//   (revalidate) and serves stale-while-revalidating until 1 day (expire).
 app.get(
   '/posts/:id',
   workersCache({
-    maxAge: 3600,
-    staleWhileRevalidate: 300,
+    profile: 'hours',
     tags: (c) => [`post-${c.req.param('id')}`, 'posts'],
   }),
   (c) => {
-    // Tags can also be appended from inside the handler.
+    // Tags and lifetimes can also be declared from inside the handler.
     cacheTag(c, 'rendered-html')
+    if (c.req.param('id') === 'breaking') cacheLife(c, 'minutes')
     return c.html(`<h1>Post ${c.req.param('id')}</h1>`)
   },
 )
 
-// A single Cache-Control shared by browsers and the edge.
-app.get('/api/status', workersCache({ maxAge: 60, strategy: 'shared' }), (c) =>
+// stale: 0 keeps browsers revalidating with the edge on every request,
+// so a purge reaches users instantly — this library's specialty.
+app.get('/api/status', workersCache({ stale: 0, revalidate: 60, expire: 300 }), (c) =>
   c.json({ ok: true }),
 )
 

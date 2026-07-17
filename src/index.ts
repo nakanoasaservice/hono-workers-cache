@@ -1,10 +1,20 @@
-export { buildEdgeDirective, DEFAULT_MAX_AGE, DEFAULT_SWR, formatCacheTag } from './headers.js'
-export { cacheTag, noCache, workersCache } from './middleware.js'
+export {
+  buildBrowserDirective,
+  buildEdgeDirective,
+  cacheLifeProfiles,
+  formatCacheTag,
+  NEVER_EXPIRE_SECONDS,
+  resolveCacheLife,
+} from './headers.js'
+export { cacheLife, cacheTag, noCache, workersCache } from './middleware.js'
 export { purgeEverything, revalidatePath, revalidateTag } from './purge.js'
 export type {
-  CacheStrategy,
+  CacheLife,
+  CacheLifeProfile,
   PurgeResult,
-  SwrWindow,
+  ResolvedCacheLife,
+  WorkersCacheControlOptions,
+  WorkersCacheLifeOptions,
   WorkersCacheLike,
   WorkersCacheOptions,
 } from './types.js'

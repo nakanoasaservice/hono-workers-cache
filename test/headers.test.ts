@@ -1,39 +1,98 @@
 import { describe, expect, it } from 'vitest'
-import { buildEdgeDirective, formatCacheTag } from '../src/index.js'
+import {
+  buildBrowserDirective,
+  buildEdgeDirective,
+  cacheLifeProfiles,
+  formatCacheTag,
+  resolveCacheLife,
+} from '../src/index.js'
 
-describe('buildEdgeDirective', () => {
-  it('applies the defaults (5 min + SWR 15 min) with no options', () => {
-    expect(buildEdgeDirective()).toBe('public, max-age=300, stale-while-revalidate=900')
-    expect(buildEdgeDirective({})).toBe('public, max-age=300, stale-while-revalidate=900')
+describe('resolveCacheLife', () => {
+  it("falls back to the 'default' profile (Next.js: stale 5 min / revalidate 15 min / expire never)", () => {
+    expect(resolveCacheLife()).toEqual({ stale: 300, revalidate: 900, expire: 'never' })
+    expect(resolveCacheLife({})).toEqual({ stale: 300, revalidate: 900, expire: 'never' })
   })
 
-  it('builds max-age from options, defaulting the SWR window', () => {
-    expect(buildEdgeDirective({ maxAge: 3600 })).toBe(
-      'public, max-age=3600, stale-while-revalidate=900',
+  it('resolves a named profile', () => {
+    expect(resolveCacheLife({ profile: 'hours' })).toEqual({
+      stale: 300,
+      revalidate: 3600,
+      expire: 86400,
+    })
+  })
+
+  it('lets explicit fields override the profile', () => {
+    expect(resolveCacheLife({ profile: 'days', stale: 0 })).toEqual({
+      stale: 0,
+      revalidate: 86400,
+      expire: 604800,
+    })
+  })
+
+  it('accepts a fully custom lifetime', () => {
+    expect(resolveCacheLife({ stale: 60, revalidate: 3600, expire: 86400 })).toEqual({
+      stale: 60,
+      revalidate: 3600,
+      expire: 86400,
+    })
+  })
+
+  it('throws on an unknown profile', () => {
+    // @ts-expect-error -- runtime guard for JS users
+    expect(() => resolveCacheLife({ profile: 'fortnights' })).toThrow(TypeError)
+  })
+
+  it('ships the same built-in profile values as Next.js', () => {
+    expect(cacheLifeProfiles.seconds).toEqual({ stale: 30, revalidate: 1, expire: 60 })
+    expect(cacheLifeProfiles.minutes).toEqual({ stale: 300, revalidate: 60, expire: 3600 })
+    expect(cacheLifeProfiles.weeks).toEqual({
+      stale: 300,
+      revalidate: 604800,
+      expire: 2592000,
+    })
+    expect(cacheLifeProfiles.max).toEqual({
+      stale: 300,
+      revalidate: 2592000,
+      expire: 31536000,
+    })
+  })
+})
+
+describe('buildBrowserDirective', () => {
+  it('emits max-age=<stale> when stale > 0', () => {
+    expect(buildBrowserDirective(300)).toBe('public, max-age=300')
+  })
+
+  it('emits the revalidate-every-time policy when stale is 0 (instant purges)', () => {
+    expect(buildBrowserDirective(0)).toBe('public, max-age=0, must-revalidate')
+  })
+})
+
+describe('buildEdgeDirective', () => {
+  it('maps revalidate to max-age and (expire - revalidate) to stale-while-revalidate', () => {
+    expect(buildEdgeDirective({ stale: 300, revalidate: 3600, expire: 86400 })).toBe(
+      'public, max-age=3600, stale-while-revalidate=82800',
     )
   })
 
-  it('disables serving stale with staleWhileRevalidate: 0', () => {
-    expect(buildEdgeDirective({ maxAge: 60, staleWhileRevalidate: 0 })).toBe(
+  it("resolves expire: 'never' to a one-year SWR window", () => {
+    expect(buildEdgeDirective({ stale: 300, revalidate: 900, expire: 'never' })).toBe(
+      'public, max-age=900, stale-while-revalidate=31536000',
+    )
+  })
+
+  it('clamps the SWR window to 0 when expire <= revalidate', () => {
+    expect(buildEdgeDirective({ stale: 0, revalidate: 60, expire: 60 })).toBe(
+      'public, max-age=60, stale-while-revalidate=0',
+    )
+    expect(buildEdgeDirective({ stale: 0, revalidate: 60, expire: 30 })).toBe(
       'public, max-age=60, stale-while-revalidate=0',
     )
   })
 
-  it('appends stale-while-revalidate and stale-if-error', () => {
-    expect(buildEdgeDirective({ maxAge: 60, staleWhileRevalidate: 30, staleIfError: 600 })).toBe(
+  it('appends stale-if-error when given', () => {
+    expect(buildEdgeDirective({ stale: 0, revalidate: 60, expire: 90 }, 600)).toBe(
       'public, max-age=60, stale-while-revalidate=30, stale-if-error=600',
-    )
-  })
-
-  it("resolves 'unbounded' SWR to one year", () => {
-    expect(buildEdgeDirective({ maxAge: 60, staleWhileRevalidate: 'unbounded' })).toBe(
-      'public, max-age=60, stale-while-revalidate=31536000',
-    )
-  })
-
-  it('uses the cacheControl escape hatch verbatim', () => {
-    expect(buildEdgeDirective({ maxAge: 999, cacheControl: 's-maxage=300, max-age=0' })).toBe(
-      's-maxage=300, max-age=0',
     )
   })
 })

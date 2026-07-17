@@ -1,6 +1,6 @@
 {
   "name": "hono-workers-cache",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Cloudflare Workers Cache middleware & purge helpers for Hono (works with HonoX)",
   "type": "module",
   "license": "MIT",
