@@ -39,50 +39,7 @@ app.post('/posts/:id', async (c) => {
 })
 ```
 
-## キャッシュモデル
-
-キャッシュされる各レスポンスは 1 つの寿命を持ちます。Next.js と同じ 3 値の語彙で記述し、Cloudflare の 2 層(ブラウザとエッジ)に射影します。
-
-| フィールド | 意味(Next.js と同じ) | 変換先 |
-| --- | --- | --- |
-| `stale` | **クライアント**がサーバーに確認せずコピーを使い続ける時間 | `Cache-Control: public, max-age=<stale>`(ブラウザ) |
-| `revalidate` | **サーバー**が再生成せずに配信する時間。過ぎたら stale を配信しつつ裏で再生成 | `CDN-Cache-Control: public, max-age=<revalidate>`(エッジ) |
-| `expire` | 総寿命の上限。過ぎたらブロッキングで新規取得 | `stale-while-revalidate=<expire − revalidate>`(エッジ)。`'never'` は 1 年 |
-
-したがって `workersCache('hours')`(stale 5 分 / revalidate 1 時間 / expire 1 日)の出力は:
-
-```
-Cache-Control:     public, max-age=300                                ← ブラウザ
-CDN-Cache-Control: public, max-age=3600, stale-while-revalidate=82800 ← エッジ
-Cache-Tag:         route:/posts/:id
-```
-
-`revalidate` 以内はエッジが即答。過ぎたら stale を配信しつつバックグラウンドで再生成(まさに Next.js の挙動を CDN の SWR で実装)。`expire` を過ぎたらブロッキングで新規取得します。ブラウザは最長 `stale` 秒だけ手元のコピーを使い、その後エッジに確認しに来ます。
-
-### `stale` と purge の即時性
-
-`stale` は「Next.js らしさ」と「purge の反映速度」を交換する唯一のつまみです。purge(`revalidateTag()`)はエッジを即座に空にしますが、フレッシュなコピーを持つブラウザは最長 `stale` 秒間、再確認しに来ません。`stale: 0` にするとブラウザは**毎回**エッジへ再検証し(`max-age=0, must-revalidate` — 条件付き 304 で軽量)、purge が全ユーザーへ即時に届きます:
-
-```ts
-// 日次コンテンツ。ただし purge した瞬間に更新が見えてほしい
-app.get('/news/:id', workersCache({ profile: 'days', stale: 0 }), handler)
-```
-
-トラフィックは引き続きエッジが吸収します — 失うのはブラウザローカルのキャッシュだけです。
-
-### ビルトインプロファイル
-
-名前も値も Next.js と同一です(`cacheLifeProfiles` としてエクスポート)。
-
-| プロファイル | `stale` | `revalidate` | `expire` |
-| --- | --- | --- | --- |
-| `default` | 5 分 | 15 分 | never(エッジでは 1 年) |
-| `seconds` | 30 秒 | 1 秒 | 1 分 |
-| `minutes` | 5 分 | 1 分 | 1 時間 |
-| `hours` | 5 分 | 1 時間 | 1 日 |
-| `days` | 5 分 | 1 日 | 1 週間 |
-| `weeks` | 5 分 | 1 週間 | 30 日 |
-| `max` | 5 分 | 30 日 | 1 年 |
+> `stale` / `revalidate` / `expire` やプロファイル名の意味、エッジキャッシュヘッダへの写像は [キャッシュモデル](#キャッシュモデル) を参照してください。
 
 ## Workers Cache とは
 
@@ -219,6 +176,51 @@ export const POST = createRoute(async (c) => {
 ```
 
 `revalidatePath('/blog/')`、`purgeEverything()` も同様です。Workers ランタイム外(Node での dev、テスト)では `{ ok: false, reason: 'cache-unavailable' }` を返す no-op になり、throw せず開発を壊しません。
+
+## キャッシュモデル
+
+キャッシュされる各レスポンスは 1 つの寿命を持ちます。Next.js と同じ 3 値の語彙で記述し、Cloudflare の 2 層(ブラウザとエッジ)に射影します。
+
+| フィールド | 意味(Next.js と同じ) | 変換先 |
+| --- | --- | --- |
+| `stale` | **クライアント**がサーバーに確認せずコピーを使い続ける時間 | `Cache-Control: public, max-age=<stale>`(ブラウザ) |
+| `revalidate` | **サーバー**が再生成せずに配信する時間。過ぎたら stale を配信しつつ裏で再生成 | `CDN-Cache-Control: public, max-age=<revalidate>`(エッジ) |
+| `expire` | 総寿命の上限。過ぎたらブロッキングで新規取得 | `stale-while-revalidate=<expire − revalidate>`(エッジ)。`'never'` は 1 年 |
+
+したがって `workersCache('hours')`(stale 5 分 / revalidate 1 時間 / expire 1 日)の出力は:
+
+```
+Cache-Control:     public, max-age=300                                ← ブラウザ
+CDN-Cache-Control: public, max-age=3600, stale-while-revalidate=82800 ← エッジ
+Cache-Tag:         route:/posts/:id
+```
+
+`revalidate` 以内はエッジが即答。過ぎたら stale を配信しつつバックグラウンドで再生成(まさに Next.js の挙動を CDN の SWR で実装)。`expire` を過ぎたらブロッキングで新規取得します。ブラウザは最長 `stale` 秒だけ手元のコピーを使い、その後エッジに確認しに来ます。
+
+### `stale` と purge の即時性
+
+`stale` は「Next.js らしさ」と「purge の反映速度」を交換する唯一のつまみです。purge(`revalidateTag()`)はエッジを即座に空にしますが、フレッシュなコピーを持つブラウザは最長 `stale` 秒間、再確認しに来ません。`stale: 0` にするとブラウザは**毎回**エッジへ再検証し(`max-age=0, must-revalidate` — 条件付き 304 で軽量)、purge が全ユーザーへ即時に届きます:
+
+```ts
+// 日次コンテンツ。ただし purge した瞬間に更新が見えてほしい
+app.get('/news/:id', workersCache({ profile: 'days', stale: 0 }), handler)
+```
+
+トラフィックは引き続きエッジが吸収します — 失うのはブラウザローカルのキャッシュだけです。
+
+### ビルトインプロファイル
+
+名前も値も Next.js と同一です(`cacheLifeProfiles` としてエクスポート)。
+
+| プロファイル | `stale` | `revalidate` | `expire` |
+| --- | --- | --- | --- |
+| `default` | 5 分 | 15 分 | never(エッジでは 1 年) |
+| `seconds` | 30 秒 | 1 秒 | 1 分 |
+| `minutes` | 5 分 | 1 分 | 1 時間 |
+| `hours` | 5 分 | 1 時間 | 1 日 |
+| `days` | 5 分 | 1 日 | 1 週間 |
+| `weeks` | 5 分 | 1 週間 | 30 日 |
+| `max` | 5 分 | 30 日 | 1 年 |
 
 ## API
 

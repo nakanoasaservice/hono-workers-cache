@@ -37,50 +37,7 @@ app.post('/posts/:id', async (c) => {
 })
 ```
 
-## The cache model
-
-Every cached response has one lifetime, described in Next.js' three-value vocabulary and projected onto Cloudflare's two cache tiers (browser and edge):
-
-| Field | Meaning (same as Next.js) | Becomes |
-| --- | --- | --- |
-| `stale` | How long **clients** reuse a copy without asking the server | `Cache-Control: public, max-age=<stale>` (browser) |
-| `revalidate` | How long the **server** serves a copy before regenerating in the background | `CDN-Cache-Control: public, max-age=<revalidate>` (edge) |
-| `expire` | Max total lifetime before switching to a blocking fresh fetch | `stale-while-revalidate=<expire − revalidate>` (edge); `'never'` → one year |
-
-So `workersCache('hours')` (stale 5 min / revalidate 1 hour / expire 1 day) emits:
-
-```
-Cache-Control:     public, max-age=300                                ← browsers
-CDN-Cache-Control: public, max-age=3600, stale-while-revalidate=82800 ← edge
-Cache-Tag:         route:/posts/:id
-```
-
-Within `revalidate` the edge serves instantly; past it, the edge keeps serving stale while regenerating in the background (exactly Next.js' behavior, implemented by the CDN's SWR); past `expire`, the request blocks and fetches fresh. Browsers hold a copy for at most `stale` seconds before checking back with the edge.
-
-### `stale` and instant purges
-
-`stale` is the one knob that trades Next.js-likeness against purge latency: a purge (`revalidateTag()`) empties the edge immediately, but browsers that hold a fresh copy won't ask again for up to `stale` seconds. Set `stale: 0` and browsers revalidate with the edge on **every** request (`max-age=0, must-revalidate` — conditional 304s keep it cheap), so purges reach every user instantly:
-
-```ts
-// Daily content, but updates must be visible the moment you purge
-app.get('/news/:id', workersCache({ profile: 'days', stale: 0 }), handler)
-```
-
-The edge still absorbs all the traffic — you give up nothing but the browser-local cache.
-
-### Built-in profiles
-
-Same names and values as Next.js (`cacheLifeProfiles` export):
-
-| Profile | `stale` | `revalidate` | `expire` |
-| --- | --- | --- | --- |
-| `default` | 5 minutes | 15 minutes | never (1 year at the edge) |
-| `seconds` | 30 seconds | 1 second | 1 minute |
-| `minutes` | 5 minutes | 1 minute | 1 hour |
-| `hours` | 5 minutes | 1 hour | 1 day |
-| `days` | 5 minutes | 1 day | 1 week |
-| `weeks` | 5 minutes | 1 week | 30 days |
-| `max` | 5 minutes | 30 days | 1 year |
+> What `stale` / `revalidate` / `expire` and the profile names mean — and how they map to edge cache headers — is explained in [The cache model](#the-cache-model).
 
 ## What is Workers Cache?
 
@@ -217,6 +174,51 @@ export const POST = createRoute(async (c) => {
 ```
 
 `revalidatePath('/blog/')` and `purgeEverything()` work the same way. Outside the Workers runtime (Node during dev, tests) the helpers become a no-op resolving to `{ ok: false, reason: 'cache-unavailable' }` — they never throw and never break dev.
+
+## The cache model
+
+Every cached response has one lifetime, described in Next.js' three-value vocabulary and projected onto Cloudflare's two cache tiers (browser and edge):
+
+| Field | Meaning (same as Next.js) | Becomes |
+| --- | --- | --- |
+| `stale` | How long **clients** reuse a copy without asking the server | `Cache-Control: public, max-age=<stale>` (browser) |
+| `revalidate` | How long the **server** serves a copy before regenerating in the background | `CDN-Cache-Control: public, max-age=<revalidate>` (edge) |
+| `expire` | Max total lifetime before switching to a blocking fresh fetch | `stale-while-revalidate=<expire − revalidate>` (edge); `'never'` → one year |
+
+So `workersCache('hours')` (stale 5 min / revalidate 1 hour / expire 1 day) emits:
+
+```
+Cache-Control:     public, max-age=300                                ← browsers
+CDN-Cache-Control: public, max-age=3600, stale-while-revalidate=82800 ← edge
+Cache-Tag:         route:/posts/:id
+```
+
+Within `revalidate` the edge serves instantly; past it, the edge keeps serving stale while regenerating in the background (exactly Next.js' behavior, implemented by the CDN's SWR); past `expire`, the request blocks and fetches fresh. Browsers hold a copy for at most `stale` seconds before checking back with the edge.
+
+### `stale` and instant purges
+
+`stale` is the one knob that trades Next.js-likeness against purge latency: a purge (`revalidateTag()`) empties the edge immediately, but browsers that hold a fresh copy won't ask again for up to `stale` seconds. Set `stale: 0` and browsers revalidate with the edge on **every** request (`max-age=0, must-revalidate` — conditional 304s keep it cheap), so purges reach every user instantly:
+
+```ts
+// Daily content, but updates must be visible the moment you purge
+app.get('/news/:id', workersCache({ profile: 'days', stale: 0 }), handler)
+```
+
+The edge still absorbs all the traffic — you give up nothing but the browser-local cache.
+
+### Built-in profiles
+
+Same names and values as Next.js (`cacheLifeProfiles` export):
+
+| Profile | `stale` | `revalidate` | `expire` |
+| --- | --- | --- | --- |
+| `default` | 5 minutes | 15 minutes | never (1 year at the edge) |
+| `seconds` | 30 seconds | 1 second | 1 minute |
+| `minutes` | 5 minutes | 1 minute | 1 hour |
+| `hours` | 5 minutes | 1 hour | 1 day |
+| `days` | 5 minutes | 1 day | 1 week |
+| `weeks` | 5 minutes | 1 week | 30 days |
+| `max` | 5 minutes | 30 days | 1 year |
 
 ## API
 
