@@ -5,9 +5,14 @@
 [![CI](https://github.com/nakanoasaservice/hono-workers-cache/actions/workflows/ci.yml/badge.svg)](https://github.com/nakanoasaservice/hono-workers-cache/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/npm/l/hono-workers-cache?style=flat-square)](https://github.com/nakanoasaservice/hono-workers-cache/blob/main/LICENSE)
 
-[Cloudflare Workers Cache](https://developers.cloudflare.com/workers/cache/) を [Hono](https://hono.dev)([HonoX](https://github.com/honojs/honox) でも動作)から宣言的に使うためのミドルウェアと purge ヘルパー。
+`cacheLife()`、`cacheTag()`、`revalidateTag()` — Next.js のキャッシュ API を、[Hono](https://hono.dev) で、CPU コストゼロで。
 
-**Next.js [Cache Components](https://nextjs.org/docs/app/getting-started/cache-components) のセマンティクスを Hono に**: Next.js の [`cacheLife()`](https://nextjs.org/docs/app/api-reference/functions/cacheLife) と同じ `stale` / `revalidate` / `expire` の語彙・同じビルトインプロファイル(`'seconds'` … `'max'`)で寿命を宣言し、`cacheTag()` でレンダリング内容にタグを付け、データが変わったら `revalidateTag()` を呼ぶ。違いはキャッシュが Worker の前段、Cloudflare のエッジで行われること。HIT は CPU コストゼロで、あなたのコードは一切実行されません。
+基盤は [Workers Cache](https://developers.cloudflare.com/workers/cache/)。Worker の前段に置かれた Cloudflare のエッジキャッシュなので、HIT はあなたのコードが実行される前に返されます。
+
+- 🧠 **Next.js のセマンティクス** — `stale` / `revalidate` / `expire`、[Cache Components](https://nextjs.org/docs/app/getting-started/cache-components) と同じビルトインプロファイル・同じマージルール
+- ⚡ **HIT 時の CPU ゼロ** — キャッシュは Worker の内部ではなく前段で動く
+- 🏷️ **タグベースの再検証** — `revalidateTag()` / `revalidatePath()`、route / path タグの自動付与
+- 🪶 **ヘッダのみ** — キャッシュの読み書きは一切しない。仕事はポリシー宣言と purge だけ
 
 [English README](./README.md)
 
@@ -40,31 +45,6 @@ app.post('/posts/:id', async (c) => {
 ```
 
 > `stale` / `revalidate` / `expire` やプロファイル名の意味、エッジキャッシュヘッダへの写像は [キャッシュモデル](#キャッシュモデル) を参照してください。
-
-## Workers Cache とは
-
-Workers Cache(2026 年登場)は Worker の**前段**で動くエッジキャッシュです。`wrangler.jsonc` に `"cache": { "enabled": true }`(Wrangler >= 4.69.0)を書くと、Cloudflare は Worker を起動する**前に**キャッシュを照合します。HIT 時は Hono を含むあなたのコードは一切実行されません。
-
-この事実がパッケージ全体の設計を規定します。このパッケージは**キャッシュを読み書きしません**。仕事は 2 つだけです。
-
-1. **ポリシー宣言** — `workersCache()` / `cacheLife()` がレスポンスに `Cache-Control` / `CDN-Cache-Control` / `Cache-Tag` を付与
-2. **無効化** — `revalidateTag()` / `revalidatePath()` / `revalidateEverything()` が [`cache.purge()`](https://developers.cloudflare.com/workers/cache/purge/) を Next.js の `revalidateTag` 風 API で抽象化
-
-### `hono/cache` との違い
-
-`hono/cache` は旧 Cache API(`caches.default`)ベースで、両者は独立したシステムです。
-
-|  | Workers Cache(本パッケージ) | Cache API(`hono/cache`) |
-| --- | --- | --- |
-| 動作する場所 | Worker の前段 | Worker の内部 |
-| HIT 時に Worker が動くか | 動かない(CPU ゼロ) | 毎リクエスト動く |
-| リードスルー | 自動 | 手動 `put()` / `match()` |
-| リクエスト collapsing | 自動 | なし |
-| Tiered cache | 自動 | なし |
-| 無効化 | `ctx.cache.purge()`(タグ / パスプレフィックス / 全消去) | `cache.delete()`(単一データセンターのみ) |
-| purge のスコープ | Worker エントリポイント単位 | URL 単位 |
-
-新規 Worker には Cloudflare は Workers Cache を推奨しています。Worker 内から細かくプログラマブルに制御したい場合は引き続き `hono/cache` を使ってください。
 
 ## インストール
 
@@ -184,6 +164,31 @@ await revalidatePath('/blog/:id', 'route')    // そのルートが生成した�
 await revalidatePath('/blog/', 'prefix')      // /blog/ 配下すべて(Cloudflare pathPrefixes)
 await revalidateEverything()                  // エントリポイントのキャッシュ全体
 ```
+
+## 仕組み
+
+Workers Cache(2026 年登場)は Worker の**前段**で動くエッジキャッシュです。`wrangler.jsonc` に `"cache": { "enabled": true }`(Wrangler >= 4.69.0)を書くと、Cloudflare は Worker を起動する**前に**キャッシュを照合します。HIT 時は Hono を含むあなたのコードは一切実行されません。
+
+この事実がパッケージ全体の設計を規定します。このパッケージは**キャッシュを読み書きしません**。仕事は 2 つだけです。
+
+1. **ポリシー宣言** — `workersCache()` / `cacheLife()` がレスポンスに `Cache-Control` / `CDN-Cache-Control` / `Cache-Tag` を付与
+2. **無効化** — `revalidateTag()` / `revalidatePath()` / `revalidateEverything()` が [`cache.purge()`](https://developers.cloudflare.com/workers/cache/purge/) を Next.js の `revalidateTag` 風 API で抽象化
+
+### `hono/cache` との違い
+
+`hono/cache` は旧 Cache API(`caches.default`)ベースで、両者は独立したシステムです。
+
+|  | Workers Cache(本パッケージ) | Cache API(`hono/cache`) |
+| --- | --- | --- |
+| 動作する場所 | Worker の前段 | Worker の内部 |
+| HIT 時に Worker が動くか | 動かない(CPU ゼロ) | 毎リクエスト動く |
+| リードスルー | 自動 | 手動 `put()` / `match()` |
+| リクエスト collapsing | 自動 | なし |
+| Tiered cache | 自動 | なし |
+| 無効化 | `ctx.cache.purge()`(タグ / パスプレフィックス / 全消去) | `cache.delete()`(単一データセンターのみ) |
+| purge のスコープ | Worker エントリポイント単位 | URL 単位 |
+
+新規 Worker には Cloudflare は Workers Cache を推奨しています。Worker 内から細かくプログラマブルに制御したい場合は引き続き `hono/cache` を使ってください。
 
 ## キャッシュモデル
 

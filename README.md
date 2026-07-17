@@ -5,9 +5,14 @@
 [![CI](https://github.com/nakanoasaservice/hono-workers-cache/actions/workflows/ci.yml/badge.svg)](https://github.com/nakanoasaservice/hono-workers-cache/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/npm/l/hono-workers-cache?style=flat-square)](https://github.com/nakanoasaservice/hono-workers-cache/blob/main/LICENSE)
 
-Declarative [Cloudflare Workers Cache](https://developers.cloudflare.com/workers/cache/) middleware and purge helpers for [Hono](https://hono.dev) (works with [HonoX](https://github.com/honojs/honox)).
+`cacheLife()`, `cacheTag()`, `revalidateTag()` — Next.js' caching API, in [Hono](https://hono.dev), at zero CPU cost.
 
-**Next.js [Cache Components](https://nextjs.org/docs/app/getting-started/cache-components) semantics for Hono**: declare a lifetime with the same `stale` / `revalidate` / `expire` vocabulary and the same built-in profiles (`'seconds'` … `'max'`) as Next.js' [`cacheLife()`](https://nextjs.org/docs/app/api-reference/functions/cacheLife), tag what a route renders with `cacheTag()`, and call `revalidateTag()` when the data changes. The difference: the cache is Cloudflare's edge, in front of your Worker — a cache hit costs zero CPU and your code never even runs.
+Built on [Workers Cache](https://developers.cloudflare.com/workers/cache/), Cloudflare's edge cache that sits in front of your Worker: a hit is served before your code even runs.
+
+- 🧠 **Next.js semantics** — `stale` / `revalidate` / `expire`, the same built-in profiles, the same merge rules as [Cache Components](https://nextjs.org/docs/app/getting-started/cache-components)
+- ⚡ **Zero CPU on hits** — the cache runs in front of your Worker, not inside it
+- 🏷️ **Tag-based revalidation** — `revalidateTag()` / `revalidatePath()`, with automatic route & path tags
+- 🪶 **Headers only** — this package never reads or writes the cache; it declares policy and purges
 
 ```ts
 import { Hono } from 'hono'
@@ -38,31 +43,6 @@ app.post('/posts/:id', async (c) => {
 ```
 
 > What `stale` / `revalidate` / `expire` and the profile names mean — and how they map to edge cache headers — is explained in [The cache model](#the-cache-model).
-
-## What is Workers Cache?
-
-Workers Cache (2026) is an edge cache that runs **in front of** your Worker. Enable it with `"cache": { "enabled": true }` in `wrangler.jsonc` (Wrangler >= 4.69.0) and Cloudflare checks the cache **before** invoking your Worker — on a HIT, your code (including Hono) never executes.
-
-That shapes this package's entire design: it **never reads or writes the cache**. It only does two things:
-
-1. **Declare policy** — `workersCache()` / `cacheLife()` stamp `Cache-Control` / `CDN-Cache-Control` / `Cache-Tag` on responses
-2. **Invalidate** — `revalidateTag()` / `revalidatePath()` / `revalidateEverything()` wrap [`cache.purge()`](https://developers.cloudflare.com/workers/cache/purge/) in a Next.js-`revalidateTag`-style API
-
-### Not the same as `hono/cache`
-
-`hono/cache` is built on the older Cache API (`caches.default`). They are independent systems:
-
-|  | Workers Cache (this package) | Cache API (`hono/cache`) |
-| --- | --- | --- |
-| Where it runs | In front of the Worker | Inside the Worker |
-| Worker invoked on HIT | No (zero CPU) | Yes, every request |
-| Read-through | Automatic | Manual `put()` / `match()` |
-| Request collapsing | Automatic | No |
-| Tiered cache | Automatic | No |
-| Invalidation | `ctx.cache.purge()` (tags / path prefixes / everything) | `cache.delete()` (single data center only) |
-| Purge scope | Per Worker entrypoint | Per URL |
-
-For new Workers, Cloudflare recommends Workers Cache. Keep using `hono/cache` when you need fine-grained programmatic control from inside the Worker.
 
 ## Install
 
@@ -182,6 +162,31 @@ await revalidatePath('/blog/:id', 'route')    // every URL the route produced (r
 await revalidatePath('/blog/', 'prefix')      // everything under /blog/ (Cloudflare pathPrefixes)
 await revalidateEverything()                  // the whole entrypoint cache
 ```
+
+## How it works
+
+Workers Cache (2026) is an edge cache that runs **in front of** your Worker. Enable it with `"cache": { "enabled": true }` in `wrangler.jsonc` (Wrangler >= 4.69.0) and Cloudflare checks the cache **before** invoking your Worker — on a HIT, your code (including Hono) never executes.
+
+That shapes this package's entire design: it **never reads or writes the cache**. It only does two things:
+
+1. **Declare policy** — `workersCache()` / `cacheLife()` stamp `Cache-Control` / `CDN-Cache-Control` / `Cache-Tag` on responses
+2. **Invalidate** — `revalidateTag()` / `revalidatePath()` / `revalidateEverything()` wrap [`cache.purge()`](https://developers.cloudflare.com/workers/cache/purge/) in a Next.js-`revalidateTag`-style API
+
+### Not the same as `hono/cache`
+
+`hono/cache` is built on the older Cache API (`caches.default`). They are independent systems:
+
+|  | Workers Cache (this package) | Cache API (`hono/cache`) |
+| --- | --- | --- |
+| Where it runs | In front of the Worker | Inside the Worker |
+| Worker invoked on HIT | No (zero CPU) | Yes, every request |
+| Read-through | Automatic | Manual `put()` / `match()` |
+| Request collapsing | Automatic | No |
+| Tiered cache | Automatic | No |
+| Invalidation | `ctx.cache.purge()` (tags / path prefixes / everything) | `cache.delete()` (single data center only) |
+| Purge scope | Per Worker entrypoint | Per URL |
+
+For new Workers, Cloudflare recommends Workers Cache. Keep using `hono/cache` when you need fine-grained programmatic control from inside the Worker.
 
 ## The cache model
 
