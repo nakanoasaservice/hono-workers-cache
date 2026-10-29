@@ -1,5 +1,5 @@
-import type { Context, MiddlewareHandler } from 'hono'
-import { routePath } from 'hono/route'
+import type { Context, MiddlewareHandler } from "hono";
+import { routePath } from "hono/route";
 import {
   buildBrowserDirective,
   buildEdgeDirective,
@@ -8,15 +8,15 @@ import {
   NEVER_EXPIRE_SECONDS,
   normalizePath,
   resolveCacheLife,
-} from './headers.js'
-import type { CacheLife, CacheLifeProfile, WorkersCacheOptions } from './types.js'
+} from "./headers.js";
+import type { CacheLife, CacheLifeProfile, WorkersCacheOptions } from "./types.js";
 
-declare module 'hono' {
+declare module "hono" {
   interface ContextVariableMap {
     /** Accumulator for tags appended from handlers via cacheTag(). */
-    __workersCacheTags?: string[]
+    __workersCacheTags?: string[];
     /** Accumulator for lifetimes declared from handlers via cacheLife(). */
-    __workersCacheLife?: CacheLife
+    __workersCacheLife?: CacheLife;
   }
 }
 
@@ -24,11 +24,11 @@ declare module 'hono' {
  * Statuses Workers Cache may store. Cache headers are not applied to anything
  * else. (A conservative subset of Cloudflare's default cacheable statuses.)
  */
-const CACHEABLE_STATUS = new Set([200, 203, 204, 301, 302, 304, 308, 404, 410])
+const CACHEABLE_STATUS = new Set([200, 203, 204, 301, 302, 304, 308, 404, 410]);
 
 const isDev = () =>
   // @ts-expect-error -- replaced by Vite's define; may be undefined when running on workerd
-  typeof import.meta.env !== 'undefined' && import.meta.env?.DEV === true
+  typeof import.meta.env !== "undefined" && import.meta.env?.DEV === true;
 
 /**
  * Append Cache-Tag values to the response from a handler or deeply nested code.
@@ -43,12 +43,12 @@ const isDev = () =>
  * ```
  */
 export function cacheTag(c: Context, ...tags: string[]): void {
-  const current = c.get('__workersCacheTags') ?? []
-  c.set('__workersCacheTags', [...current, ...tags])
+  const current = c.get("__workersCacheTags") ?? [];
+  c.set("__workersCacheTags", [...current, ...tags]);
 }
 
-const expireSeconds = (expire: number | 'never'): number =>
-  expire === 'never' ? NEVER_EXPIRE_SECONDS : expire
+const expireSeconds = (expire: number | "never"): number =>
+  expire === "never" ? NEVER_EXPIRE_SECONDS : expire;
 
 /**
  * Declare a cache lifetime from a handler or deeply nested code — the
@@ -70,23 +70,23 @@ const expireSeconds = (expire: number | 'never'): number =>
  * ```
  */
 export function cacheLife(c: Context, life: CacheLifeProfile | CacheLife): void {
-  const next = typeof life === 'string' ? cacheLifeProfiles[life] : life
+  const next = typeof life === "string" ? cacheLifeProfiles[life] : life;
   if (!next) {
     throw new TypeError(
-      `[cacheLife] Unknown cache profile "${String(life)}". ` +
-        `Available profiles: ${Object.keys(cacheLifeProfiles).join(', ')}`,
-    )
+      `[cacheLife] Unknown cache profile "${typeof life === "string" ? life : "(invalid)"}". ` +
+        `Available profiles: ${Object.keys(cacheLifeProfiles).join(", ")}`,
+    );
   }
-  const current = c.get('__workersCacheLife') ?? {}
-  const merged: CacheLife = { ...current }
+  const current = c.get("__workersCacheLife") ?? {};
+  const merged: CacheLife = { ...current };
   if (next.stale !== undefined) {
-    merged.stale = current.stale === undefined ? next.stale : Math.min(current.stale, next.stale)
+    merged.stale = current.stale === undefined ? next.stale : Math.min(current.stale, next.stale);
   }
   if (next.revalidate !== undefined) {
     merged.revalidate =
       current.revalidate === undefined
         ? next.revalidate
-        : Math.min(current.revalidate, next.revalidate)
+        : Math.min(current.revalidate, next.revalidate);
   }
   if (next.expire !== undefined) {
     merged.expire =
@@ -94,9 +94,9 @@ export function cacheLife(c: Context, life: CacheLifeProfile | CacheLife): void 
         ? next.expire
         : expireSeconds(next.expire) < expireSeconds(current.expire)
           ? next.expire
-          : current.expire
+          : current.expire;
   }
-  c.set('__workersCacheLife', merged)
+  c.set("__workersCacheLife", merged);
 }
 
 /**
@@ -124,75 +124,75 @@ export function cacheLife(c: Context, life: CacheLifeProfile | CacheLife): void 
 export function workersCache(
   options: CacheLifeProfile | WorkersCacheOptions = {},
 ): MiddlewareHandler {
-  const opts: WorkersCacheOptions = typeof options === 'string' ? { profile: options } : options
-  const useRouteTag = opts.routeTag !== false
-  const usePathTag = opts.pathTag !== false
+  const opts: WorkersCacheOptions = typeof options === "string" ? { profile: options } : options;
+  const useRouteTag = opts.routeTag !== false;
+  const usePathTag = opts.pathTag !== false;
 
   return async (c, next) => {
-    await next()
+    await next();
 
     // Workers Cache only stores GET/HEAD (GET and HEAD share a cache entry)
-    if (c.req.method !== 'GET' && c.req.method !== 'HEAD') return
+    if (c.req.method !== "GET" && c.req.method !== "HEAD") return;
 
-    const res = c.res
+    const res = c.res;
 
     // Set-Cookie triggers an automatic BYPASS at the edge. Adding headers would
     // be pointless, so leave the response alone — but warn in dev about the
     // "wanted to cache it, but Set-Cookie is present" accident.
-    if (res.headers.has('Set-Cookie')) {
+    if (res.headers.has("Set-Cookie")) {
       if (isDev()) {
         console.warn(
           `[workersCache] ${c.req.path}: the response carries Set-Cookie, so the edge will BYPASS it. ` +
-            'Review your use of session middleware on this route.',
-        )
+            "Review your use of session middleware on this route.",
+        );
       }
-      return
+      return;
     }
 
-    if (!CACHEABLE_STATUS.has(res.status)) return
+    if (!CACHEABLE_STATUS.has(res.status)) return;
 
     // Respect an explicit Cache-Control set by the handler — do nothing
-    if (res.headers.has('Cache-Control')) return
+    if (res.headers.has("Cache-Control")) return;
 
     if (opts.cacheControl) {
       // Escape hatch: one hand-written Cache-Control, verbatim, both tiers.
-      res.headers.set('Cache-Control', opts.cacheControl)
+      res.headers.set("Cache-Control", opts.cacheControl);
     } else {
       // Middleware options are the default; fields declared via cacheLife()
       // in the handler win (already shortest-merged among themselves).
-      const handlerLife = c.get('__workersCacheLife')
-      const life = resolveCacheLife({ ...opts, ...handlerLife })
+      const handlerLife = c.get("__workersCacheLife");
+      const life = resolveCacheLife({ ...opts, ...handlerLife });
       if (isDev() && expireSeconds(life.expire) < life.revalidate) {
         console.warn(
           `[workersCache] ${c.req.path}: expire (${String(life.expire)}) is shorter than ` +
             `revalidate (${life.revalidate}) — the stale-while-revalidate window is clamped to 0.`,
-        )
+        );
       }
-      res.headers.set('Cache-Control', buildBrowserDirective(life.stale))
-      res.headers.set('CDN-Cache-Control', buildEdgeDirective(life, opts.staleIfError))
+      res.headers.set("Cache-Control", buildBrowserDirective(life.stale));
+      res.headers.set("CDN-Cache-Control", buildEdgeDirective(life, opts.staleIfError));
     }
 
     // Collect tags: option-provided + automatic route/path tags + cacheTag() additions
-    const collected: string[] = []
-    const optTags = typeof opts.tags === 'function' ? opts.tags(c) : opts.tags
-    if (optTags) collected.push(...optTags)
+    const collected: string[] = [];
+    const optTags = typeof opts.tags === "function" ? opts.tags(c) : opts.tags;
+    if (optTags) collected.push(...optTags);
     // Called after next(), so this resolves to the route template of the
     // handler that actually produced the response.
-    const matchedRoutePath = routePath(c)
-    if (useRouteTag && matchedRoutePath && matchedRoutePath !== '/*') {
-      collected.push(`route:${matchedRoutePath}`)
+    const matchedRoutePath = routePath(c);
+    if (useRouteTag && matchedRoutePath && matchedRoutePath !== "/*") {
+      collected.push(`route:${matchedRoutePath}`);
     }
     if (usePathTag) {
-      collected.push(`path:${normalizePath(c.req.path)}`)
+      collected.push(`path:${normalizePath(c.req.path)}`);
     }
-    const dynamicTags = c.get('__workersCacheTags')
-    if (dynamicTags) collected.push(...dynamicTags)
+    const dynamicTags = c.get("__workersCacheTags");
+    if (dynamicTags) collected.push(...dynamicTags);
 
     if (collected.length > 0) {
-      const value = formatCacheTag(collected)
-      if (value) res.headers.set('Cache-Tag', value)
+      const value = formatCacheTag(collected);
+      if (value) res.headers.set("Cache-Tag", value);
     }
-  }
+  };
 }
 
 /**
@@ -202,11 +202,11 @@ export function workersCache(
  */
 export function noCache(): MiddlewareHandler {
   return async (c, next) => {
-    await next()
-    const h = c.res.headers
-    h.set('Cache-Control', 'no-store')
-    h.delete('CDN-Cache-Control')
-    h.delete('Cloudflare-CDN-Cache-Control')
-    h.delete('Cache-Tag')
-  }
+    await next();
+    const h = c.res.headers;
+    h.set("Cache-Control", "no-store");
+    h.delete("CDN-Cache-Control");
+    h.delete("Cloudflare-CDN-Cache-Control");
+    h.delete("Cache-Tag");
+  };
 }

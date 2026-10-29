@@ -17,31 +17,31 @@
 [English README](./README.md)
 
 ```ts
-import { Hono } from 'hono'
-import { cacheTag, revalidateTag, workersCache } from 'hono-workers-cache'
+import { Hono } from "hono";
+import { cacheTag, revalidateTag, workersCache } from "hono-workers-cache";
 
-const app = new Hono()
+const app = new Hono();
 
 // キャッシュ対象の GET — プロファイル名と値は Next.js の cacheLife() と同一
-app.get('/posts/:id', workersCache('hours'), async (c) => {
-  const post = await getPostById(c.req.param('id'))
+app.get("/posts/:id", workersCache("hours"), async (c) => {
+  const post = await getPostById(c.req.param("id"));
 
-  cacheTag(c, `post-${post.id}`) // 更新後に purge できるようタグを付ける
+  cacheTag(c, `post-${post.id}`); // 更新後に purge できるようタグを付ける
 
-  return c.json(post)
-})
+  return c.json(post);
+});
 
 // 更新 — DB に保存したあと、タグを purge して次の GET で再生成させる
-app.post('/posts/:id', async (c) => {
-  const id = c.req.param('id')
-  const { body } = await c.req.json<{ body: string }>()
+app.post("/posts/:id", async (c) => {
+  const id = c.req.param("id");
+  const { body } = await c.req.json<{ body: string }>();
 
-  await updatePost(id, body)
+  await updatePost(id, body);
 
-  await revalidateTag(`post-${id}`, c)
+  await revalidateTag(`post-${id}`, c);
 
-  return c.json({ ok: true })
-})
+  return c.json({ ok: true });
+});
 ```
 
 > `stale` / `revalidate` / `expire` やプロファイル名の意味、エッジキャッシュヘッダへの写像は [キャッシュモデル](#キャッシュモデル) を参照してください。
@@ -60,7 +60,7 @@ Wrangler 設定で Workers Cache を有効化します(Wrangler >= 4.69.0)。こ
 ```jsonc
 // wrangler.jsonc
 {
-  "cache": { "enabled": true }
+  "cache": { "enabled": true },
 }
 ```
 
@@ -69,37 +69,37 @@ Wrangler 設定で Workers Cache を有効化します(Wrangler >= 4.69.0)。こ
 ### 素の Hono
 
 ```ts
-import { Hono } from 'hono'
-import { cacheLife, noCache, revalidatePath, workersCache } from 'hono-workers-cache'
+import { Hono } from "hono";
+import { cacheLife, noCache, revalidatePath, workersCache } from "hono-workers-cache";
 
-const app = new Hono()
+const app = new Hono();
 
 // 設定ゼロ: 'default' プロファイル(stale 5 分 / revalidate 15 分 / expire never)
-app.get('/about', workersCache(), (c) => c.html('<h1>About</h1>'))
+app.get("/about", workersCache(), (c) => c.html("<h1>About</h1>"));
 
 // プロファイル名 — Next.js の cacheLife('hours') と同じ感覚で
-app.get('/posts/:id', workersCache('hours'), (c) => c.json({ id: c.req.param('id') }))
+app.get("/posts/:id", workersCache("hours"), (c) => c.json({ id: c.req.param("id") }));
 
 // カスタム寿命 — Next.js が受け取るのと同じオブジェクト
-app.get('/feed', workersCache({ stale: 60, revalidate: 3600, expire: 86400 }), handler)
+app.get("/feed", workersCache({ stale: 60, revalidate: 3600, expire: 86400 }), handler);
 
 // ハンドラ内から寿命を短縮(最短が勝つ — Next.js と同じルール)
-app.get('/pages/:slug', workersCache('days'), async (c) => {
-  const page = await getPage(c.req.param('slug'))
-  if (page.frequentlyUpdated) cacheLife(c, 'minutes')
-  return c.html(page.html)
-})
+app.get("/pages/:slug", workersCache("days"), async (c) => {
+  const page = await getPage(c.req.param("slug"));
+  if (page.frequentlyUpdated) cacheLife(c, "minutes");
+  return c.html(page.html);
+});
 
 // キャッシュさせない(上流がスタンプしたキャッシュ系ヘッダも除去)
-app.get('/admin', noCache(), (c) => c.text('admin'))
+app.get("/admin", noCache(), (c) => c.text("admin"));
 
 // 更新後に無効化
-app.post('/posts/:id', async (c) => {
-  const id = c.req.param('id')
-  await update(id)
-  await revalidatePath(`/posts/${id}`, c) // 完全一致パス
-  return c.json({ ok: true })
-})
+app.post("/posts/:id", async (c) => {
+  const id = c.req.param("id");
+  await update(id);
+  await revalidatePath(`/posts/${id}`, c); // 完全一致パス
+  return c.json({ ok: true });
+});
 ```
 
 ### HonoX: ルート単位
@@ -108,61 +108,61 @@ app.post('/posts/:id', async (c) => {
 
 ```tsx
 // app/routes/blog/[id].tsx
-import { createRoute } from 'honox/factory'
-import { cacheTag, workersCache } from 'hono-workers-cache'
+import { createRoute } from "honox/factory";
+import { cacheTag, workersCache } from "hono-workers-cache";
 
 export default createRoute(
   workersCache({
-    profile: 'hours',
+    profile: "hours",
     stale: 0, // purge を全ユーザーへ即時反映
-    tags: (c) => [`post-${c.req.param('id')}`, 'posts'],
+    tags: (c) => [`post-${c.req.param("id")}`, "posts"],
   }),
   async (c) => {
-    const post = await getPost(c.req.param('id'))
-    cacheTag(c, `author-${post.authorId}`) // ハンドラ内から追記も可能
-    return c.render(<Post post={post} />)
+    const post = await getPost(c.req.param("id"));
+    cacheTag(c, `author-${post.authorId}`); // ハンドラ内から追記も可能
+    return c.render(<Post post={post} />);
   },
-)
+);
 ```
 
 ### HonoX: ディレクトリ単位
 
 ```ts
 // app/routes/blog/_middleware.ts
-import { createRoute } from 'honox/factory'
-import { workersCache } from 'hono-workers-cache'
+import { createRoute } from "honox/factory";
+import { workersCache } from "hono-workers-cache";
 
-export default createRoute(workersCache({ profile: 'minutes', tags: ['blog'] }))
+export default createRoute(workersCache({ profile: "minutes", tags: ["blog"] }));
 ```
 
 ```ts
 // app/routes/admin/_middleware.ts
-import { createRoute } from 'honox/factory'
-import { noCache } from 'hono-workers-cache'
+import { createRoute } from "honox/factory";
+import { noCache } from "hono-workers-cache";
 
-export default createRoute(noCache())
+export default createRoute(noCache());
 ```
 
 ### 更新時の無効化
 
 ```tsx
-import { revalidateTag } from 'hono-workers-cache'
+import { revalidateTag } from "hono-workers-cache";
 
 export const POST = createRoute(async (c) => {
-  const id = c.req.param('id')
-  await updatePost(id, await c.req.parseBody())
-  await revalidateTag([`post-${id}`, 'posts'], c) // c は省略可
-  return c.redirect(`/blog/${id}`)
-})
+  const id = c.req.param("id");
+  await updatePost(id, await c.req.parseBody());
+  await revalidateTag([`post-${id}`, "posts"], c); // c は省略可
+  return c.redirect(`/blog/${id}`);
+});
 ```
 
 `revalidatePath()`、`revalidateEverything()` も同様です。Workers ランタイム外(Node での dev、テスト)では `{ ok: false, reason: 'cache-unavailable' }` を返す no-op になり、throw せず開発を壊しません。
 
 ```ts
-await revalidatePath('/blog/post-1')          // 完全一致パス(path: タグ)
-await revalidatePath('/blog/:id', 'route')    // そのルートが生成した全 URL(route: タグ)
-await revalidatePath('/blog/', 'prefix')      // /blog/ 配下すべて(Cloudflare pathPrefixes)
-await revalidateEverything()                  // エントリポイントのキャッシュ全体
+await revalidatePath("/blog/post-1"); // 完全一致パス(path: タグ)
+await revalidatePath("/blog/:id", "route"); // そのルートが生成した全 URL(route: タグ)
+await revalidatePath("/blog/", "prefix"); // /blog/ 配下すべて(Cloudflare pathPrefixes)
+await revalidateEverything(); // エントリポイントのキャッシュ全体
 ```
 
 ## 仕組み
@@ -178,15 +178,15 @@ Workers Cache(2026 年登場)は Worker の**前段**で動くエッジキャッ
 
 `hono/cache` は旧 Cache API(`caches.default`)ベースで、両者は独立したシステムです。
 
-|  | Workers Cache(本パッケージ) | Cache API(`hono/cache`) |
-| --- | --- | --- |
-| 動作する場所 | Worker の前段 | Worker の内部 |
-| HIT 時に Worker が動くか | 動かない(CPU ゼロ) | 毎リクエスト動く |
-| リードスルー | 自動 | 手動 `put()` / `match()` |
-| リクエスト collapsing | 自動 | なし |
-| Tiered cache | 自動 | なし |
-| 無効化 | `ctx.cache.purge()`(タグ / パスプレフィックス / 全消去) | `cache.delete()`(単一データセンターのみ) |
-| purge のスコープ | Worker エントリポイント単位 | URL 単位 |
+|                          | Workers Cache(本パッケージ)                             | Cache API(`hono/cache`)                  |
+| ------------------------ | ------------------------------------------------------- | ---------------------------------------- |
+| 動作する場所             | Worker の前段                                           | Worker の内部                            |
+| HIT 時に Worker が動くか | 動かない(CPU ゼロ)                                      | 毎リクエスト動く                         |
+| リードスルー             | 自動                                                    | 手動 `put()` / `match()`                 |
+| リクエスト collapsing    | 自動                                                    | なし                                     |
+| Tiered cache             | 自動                                                    | なし                                     |
+| 無効化                   | `ctx.cache.purge()`(タグ / パスプレフィックス / 全消去) | `cache.delete()`(単一データセンターのみ) |
+| purge のスコープ         | Worker エントリポイント単位                             | URL 単位                                 |
 
 新規 Worker には Cloudflare は Workers Cache を推奨しています。Worker 内から細かくプログラマブルに制御したい場合は引き続き `hono/cache` を使ってください。
 
@@ -194,11 +194,11 @@ Workers Cache(2026 年登場)は Worker の**前段**で動くエッジキャッ
 
 キャッシュされる各レスポンスは 1 つの寿命を持ちます。Next.js と同じ 3 値の語彙で記述し、Cloudflare の 2 層(ブラウザとエッジ)に射影します。
 
-| フィールド | 意味(Next.js と同じ) | 変換先 |
-| --- | --- | --- |
-| `stale` | **クライアント**がサーバーに確認せずコピーを使い続ける時間 | `Cache-Control: public, max-age=<stale>`(ブラウザ) |
-| `revalidate` | **サーバー**が再生成せずに配信する時間。過ぎたら stale を配信しつつ裏で再生成 | `CDN-Cache-Control: public, max-age=<revalidate>`(エッジ) |
-| `expire` | 総寿命の上限。過ぎたらブロッキングで新規取得 | `stale-while-revalidate=<expire − revalidate>`(エッジ)。`'never'` は 1 年 |
+| フィールド   | 意味(Next.js と同じ)                                                          | 変換先                                                                    |
+| ------------ | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `stale`      | **クライアント**がサーバーに確認せずコピーを使い続ける時間                    | `Cache-Control: public, max-age=<stale>`(ブラウザ)                        |
+| `revalidate` | **サーバー**が再生成せずに配信する時間。過ぎたら stale を配信しつつ裏で再生成 | `CDN-Cache-Control: public, max-age=<revalidate>`(エッジ)                 |
+| `expire`     | 総寿命の上限。過ぎたらブロッキングで新規取得                                  | `stale-while-revalidate=<expire − revalidate>`(エッジ)。`'never'` は 1 年 |
 
 したがって `workersCache('hours')`(stale 5 分 / revalidate 1 時間 / expire 1 日)の出力は:
 
@@ -216,7 +216,7 @@ Cache-Tag:         route:/posts/:id,path:/posts/123
 
 ```ts
 // 日次コンテンツ。ただし purge した瞬間に更新が見えてほしい
-app.get('/news/:id', workersCache({ profile: 'days', stale: 0 }), handler)
+app.get("/news/:id", workersCache({ profile: "days", stale: 0 }), handler);
 ```
 
 トラフィックは引き続きエッジが吸収します — 失うのはブラウザローカルのキャッシュだけです。
@@ -225,15 +225,15 @@ app.get('/news/:id', workersCache({ profile: 'days', stale: 0 }), handler)
 
 名前も値も Next.js と同一です(`cacheLifeProfiles` としてエクスポート)。
 
-| プロファイル | `stale` | `revalidate` | `expire` |
-| --- | --- | --- | --- |
-| `default` | 5 分 | 15 分 | never(エッジでは 1 年) |
-| `seconds` | 30 秒 | 1 秒 | 1 分 |
-| `minutes` | 5 分 | 1 分 | 1 時間 |
-| `hours` | 5 分 | 1 時間 | 1 日 |
-| `days` | 5 分 | 1 日 | 1 週間 |
-| `weeks` | 5 分 | 1 週間 | 30 日 |
-| `max` | 5 分 | 30 日 | 1 年 |
+| プロファイル | `stale` | `revalidate` | `expire`               |
+| ------------ | ------- | ------------ | ---------------------- |
+| `default`    | 5 分    | 15 分        | never(エッジでは 1 年) |
+| `seconds`    | 30 秒   | 1 秒         | 1 分                   |
+| `minutes`    | 5 分    | 1 分         | 1 時間                 |
+| `hours`      | 5 分    | 1 時間       | 1 日                   |
+| `days`       | 5 分    | 1 日         | 1 週間                 |
+| `weeks`      | 5 分    | 1 週間       | 30 日                  |
+| `max`        | 5 分    | 30 日        | 1 年                   |
 
 ## API
 
@@ -241,17 +241,17 @@ app.get('/news/:id', workersCache({ profile: 'days', stale: 0 }), handler)
 
 プロファイル名(`workersCache('hours')`)またはオプションオブジェクトを受け取ります。引数なしなら `default` プロファイルが適用されます。
 
-| オプション | 型 | デフォルト | 説明 |
-| --- | --- | --- | --- |
-| `profile` | `'default' \| 'seconds' \| 'minutes' \| 'hours' \| 'days' \| 'weeks' \| 'max'` | `'default'` | ベースプロファイル。名前も値も Next.js と同一 |
-| `stale` | `number` | プロファイル値 | ブラウザのフレッシュ期間(秒)。`0` で毎回エッジへ再検証(purge 即時反映) |
-| `revalidate` | `number` | プロファイル値 | エッジのフレッシュ期間(秒)。過ぎたら stale を配信しつつ裏で再生成 |
-| `expire` | `number \| 'never'` | プロファイル値 | 総寿命の上限。過ぎたらブロッキングで新規取得。`'never'` = 1 年 |
-| `staleIfError` | `number` | — | オリジンが 5xx を返した際に stale を配信する秒数 |
-| `tags` | `string[] \| (c: Context) => string[]` | — | `Cache-Tag` の値。関数はリクエストごとに評価 |
-| `routeTag` | `boolean` | `true` | マッチしたルートパターンから `route:/blog/:id` タグを自動付与。`revalidatePath(path, 'route')` を可能にする |
-| `pathTag` | `boolean` | `true` | 実際のリクエストパスから `path:/blog/123` タグを自動付与(クエリ除外、末尾スラッシュ正規化)。完全一致の `revalidatePath(path)` を可能にする |
-| `cacheControl` | `string` | — | エスケープハッチ。単一の `Cache-Control` として **verbatim** で出力(`CDN-Cache-Control` は出力しない)。寿命系オプション(`profile` / `stale` / `revalidate` / `expire` / `staleIfError`)とは**排他** — 型レベルで併用を禁止 |
+| オプション     | 型                                                                             | デフォルト     | 説明                                                                                                                                                                                                                       |
+| -------------- | ------------------------------------------------------------------------------ | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `profile`      | `'default' \| 'seconds' \| 'minutes' \| 'hours' \| 'days' \| 'weeks' \| 'max'` | `'default'`    | ベースプロファイル。名前も値も Next.js と同一                                                                                                                                                                              |
+| `stale`        | `number`                                                                       | プロファイル値 | ブラウザのフレッシュ期間(秒)。`0` で毎回エッジへ再検証(purge 即時反映)                                                                                                                                                     |
+| `revalidate`   | `number`                                                                       | プロファイル値 | エッジのフレッシュ期間(秒)。過ぎたら stale を配信しつつ裏で再生成                                                                                                                                                          |
+| `expire`       | `number \| 'never'`                                                            | プロファイル値 | 総寿命の上限。過ぎたらブロッキングで新規取得。`'never'` = 1 年                                                                                                                                                             |
+| `staleIfError` | `number`                                                                       | —              | オリジンが 5xx を返した際に stale を配信する秒数                                                                                                                                                                           |
+| `tags`         | `string[] \| (c: Context) => string[]`                                         | —              | `Cache-Tag` の値。関数はリクエストごとに評価                                                                                                                                                                               |
+| `routeTag`     | `boolean`                                                                      | `true`         | マッチしたルートパターンから `route:/blog/:id` タグを自動付与。`revalidatePath(path, 'route')` を可能にする                                                                                                                |
+| `pathTag`      | `boolean`                                                                      | `true`         | 実際のリクエストパスから `path:/blog/123` タグを自動付与(クエリ除外、末尾スラッシュ正規化)。完全一致の `revalidatePath(path)` を可能にする                                                                                 |
+| `cacheControl` | `string`                                                                       | —              | エスケープハッチ。単一の `Cache-Control` として **verbatim** で出力(`CDN-Cache-Control` は出力しない)。寿命系オプション(`profile` / `stale` / `revalidate` / `expire` / `staleIfError`)とは**排他** — 型レベルで併用を禁止 |
 
 明示したフィールドはプロファイルより優先されます。例: `{ profile: 'days', stale: 0 }` = 日次コンテンツ + purge 即時反映。`tags` / `routeTag` / `pathTag` はどちらの形とも併用できます。`route:` / `path:` プレフィックスは自動タグの予約領域なので、自前の `tags` / `cacheTag()` では避けてください。
 
@@ -292,11 +292,11 @@ interface PurgeResult {
 
 `revalidatePath` は Next.js の `revalidatePath(path, type?)` を Hono の語彙に読み替えた 3 モードを持ちます。
 
-| 呼び出し | Next.js の対応物 | purge されるもの |
-| --- | --- | --- |
-| `revalidatePath('/blog/post-1')` | `revalidatePath('/blog/post-1')` | `path:` タグ — そのパスだけ(クエリ文字列バリアントはまとめて)。ミドルウェアの `pathTag`(デフォルト有効)が前提 |
-| `revalidatePath('/blog/:id', 'route')` | `revalidatePath('/blog/[slug]', 'page')` | `route:` タグ — その Hono ルートが生成した全 URL。`routeTag`(デフォルト有効)が前提。`routeTag: false` だと何にもマッチせず静かに空振りする |
-| `revalidatePath('/blog/', 'prefix')` | `revalidatePath('/blog', 'layout')` | Cloudflare `pathPrefixes` — プレフィックスで始まる全パス。純粋な文字列プレフィックスなので `/blog` は `/blogger` にもマッチする。ディレクトリは `/` で終わらせること |
+| 呼び出し                               | Next.js の対応物                         | purge されるもの                                                                                                                                                     |
+| -------------------------------------- | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `revalidatePath('/blog/post-1')`       | `revalidatePath('/blog/post-1')`         | `path:` タグ — そのパスだけ(クエリ文字列バリアントはまとめて)。ミドルウェアの `pathTag`(デフォルト有効)が前提                                                        |
+| `revalidatePath('/blog/:id', 'route')` | `revalidatePath('/blog/[slug]', 'page')` | `route:` タグ — その Hono ルートが生成した全 URL。`routeTag`(デフォルト有効)が前提。`routeTag: false` だと何にもマッチせず静かに空振りする                           |
+| `revalidatePath('/blog/', 'prefix')`   | `revalidatePath('/blog', 'layout')`      | Cloudflare `pathPrefixes` — プレフィックスで始まる全パス。純粋な文字列プレフィックスなので `/blog` は `/blogger` にもマッチする。ディレクトリは `/` で終わらせること |
 
 Next.js の `revalidatePath` と同様、届くのは**サーバー側(エッジ)のキャッシュだけ**です — ブラウザは `stale` が切れるまで手元のコピーを使い続けます([`stale` と purge の即時性](#stale-と-purge-の即時性)参照)。またタグ purge が効くのは、ミドルウェアがそのタグを出力し始めた*後*にキャッシュされたエントリのみです — `pathTag` / `routeTag` の有効化直後やアップグレード直後の移行期に注意してください。
 
@@ -304,10 +304,10 @@ Next.js の `revalidatePath` と同様、届くのは**サーバー側(エッジ
 
 ## 0.3.x からの移行
 
-| 0.3.x | 現在 |
-| --- | --- |
+| 0.3.x                                         | 現在                                                                                   |
+| --------------------------------------------- | -------------------------------------------------------------------------------------- |
 | `revalidatePath('/blog/')`(path-prefix purge) | `revalidatePath('/blog/', 'prefix')` — デフォルトは**完全一致パス**のタグ purge に変更 |
-| `purgeEverything()` | `revalidateEverything()` |
+| `purgeEverything()`                           | `revalidateEverything()`                                                               |
 
 またミドルウェアが自動タグを 1 本追加で出力するようになりました(`path:<リクエストパス>`)。`pathTag: false` で無効化できます。
 
@@ -315,13 +315,13 @@ Next.js の `revalidatePath` と同様、届くのは**サーバー側(エッジ
 
 `maxAge` / `staleWhileRevalidate` / `strategy` オプションは Next.js の語彙に置き換わりました。
 
-| 0.2.x | 現在 |
-| --- | --- |
-| `workersCache({ maxAge: 3600, staleWhileRevalidate: 300 })` | `workersCache({ stale: 0, revalidate: 3600, expire: 3900 })` |
-| `staleWhileRevalidate: 'unbounded'` | `expire: 'never'` |
-| `strategy: 'cdn-split'`(デフォルト) | `stale: 0` — split は常時有効になり、`stale` がブラウザ層を制御 |
-| `strategy: 'shared'` | 非ゼロの `stale`(ブラウザローカルキャッシュ)、または verbatim 単一ヘッダの `cacheControl` |
-| `cacheControl`(エッジポリシー、ブラウザは再検証) | `cacheControl`(単一の `Cache-Control` を verbatim 出力、両層に適用) |
+| 0.2.x                                                       | 現在                                                                                      |
+| ----------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `workersCache({ maxAge: 3600, staleWhileRevalidate: 300 })` | `workersCache({ stale: 0, revalidate: 3600, expire: 3900 })`                              |
+| `staleWhileRevalidate: 'unbounded'`                         | `expire: 'never'`                                                                         |
+| `strategy: 'cdn-split'`(デフォルト)                         | `stale: 0` — split は常時有効になり、`stale` がブラウザ層を制御                           |
+| `strategy: 'shared'`                                        | 非ゼロの `stale`(ブラウザローカルキャッシュ)、または verbatim 単一ヘッダの `cacheControl` |
+| `cacheControl`(エッジポリシー、ブラウザは再検証)            | `cacheControl`(単一の `Cache-Control` を verbatim 出力、両層に適用)                       |
 
 モデル変更に伴いデフォルトポリシーも変わりました: `workersCache()` は Next.js の `default` プロファイルを適用し、その `stale: 300` によりブラウザは最長 5 分コピーを保持します。purge の即時反映が必須の箇所では `stale: 0` を指定してください。
 
@@ -357,9 +357,7 @@ Next.js の `revalidatePath` と同様、届くのは**サーバー側(エッジ
 ```sh
 pnpm install
 pnpm test           # ユニットテスト (Node)
-pnpm test:workerd   # @cloudflare/vitest-pool-workers による workerd 上の統合テスト
-pnpm typecheck
-pnpm lint
+pnpm check
 pnpm build
 ```
 

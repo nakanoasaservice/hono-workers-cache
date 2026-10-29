@@ -1,5 +1,5 @@
-import { createApp } from 'honox/server'
+import { createApp } from "honox/server";
 
-const app = createApp()
+const app = createApp();
 
-export default app
+export default app;
