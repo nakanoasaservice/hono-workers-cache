@@ -7,10 +7,13 @@
     "multibyte",
     "nakano",
     "nakanoaas",
+    "oxfmt",
+    "oxlint",
     "tsdown",
     "uncacheable",
     "unbundle",
     "vinext",
+    "viteplus",
     "workerd"
   ]
 }

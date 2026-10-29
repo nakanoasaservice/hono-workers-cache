@@ -3,8 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
+    "dev": "vp dev",
+    "build": "vp build",
     "preview": "wrangler dev",
     "deploy": "pnpm build && wrangler deploy",
     "typecheck": "tsc --noEmit"
@@ -18,7 +18,8 @@
     "@hono/vite-build": "^1.7.1",
     "@hono/vite-dev-server": "^0.23.0",
     "typescript": "^7.0.2",
-    "vite": "^8.1.5",
+    "vite": "catalog:",
+    "vite-plus": "catalog:",
     "wrangler": "^4.111.0"
   }
 }

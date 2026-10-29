@@ -1,6 +1,6 @@
-import type { Context } from 'hono'
-import { normalizePath } from './headers.js'
-import type { PurgeResult, WorkersCacheLike } from './types.js'
+import type { Context } from "hono";
+import { normalizePath } from "./headers.js";
+import type { PurgeResult, WorkersCacheLike } from "./types.js";
 
 /**
  * Resolve `cloudflare:workers`' cache via dynamic import.
@@ -9,33 +9,33 @@ import type { PurgeResult, WorkersCacheLike } from './types.js'
  */
 async function getModuleCache(): Promise<WorkersCacheLike | null> {
   try {
-    const mod = (await import('cloudflare:workers')) as { cache?: unknown }
-    const cache = mod.cache
-    if (cache && typeof (cache as Partial<WorkersCacheLike>).purge === 'function') {
-      return cache as WorkersCacheLike
+    const mod = (await import("cloudflare:workers")) as { cache?: unknown };
+    const cache = mod.cache;
+    if (cache && typeof (cache as Partial<WorkersCacheLike>).purge === "function") {
+      return cache as WorkersCacheLike;
     }
   } catch {
     // Module not resolvable = outside the Workers runtime
   }
-  return null
+  return null;
 }
 
 /** Fallback: duck-type `ctx.cache` out of the Hono Context. */
 function getContextCache(c?: Context): WorkersCacheLike | null {
-  if (!c) return null
+  if (!c) return null;
   try {
-    const cache = (c.executionCtx as { cache?: unknown } | undefined)?.cache
-    if (cache && typeof (cache as Partial<WorkersCacheLike>).purge === 'function') {
-      return cache as WorkersCacheLike
+    const cache = (c.executionCtx as { cache?: unknown } | undefined)?.cache;
+    if (cache && typeof (cache as Partial<WorkersCacheLike>).purge === "function") {
+      return cache as WorkersCacheLike;
     }
   } catch {
     // Adapter environments where executionCtx does not exist
   }
-  return null
+  return null;
 }
 
 async function resolveCache(c?: Context): Promise<WorkersCacheLike | null> {
-  return getContextCache(c) ?? (await getModuleCache())
+  return getContextCache(c) ?? (await getModuleCache());
 }
 
 /**
@@ -45,26 +45,26 @@ async function resolveCache(c?: Context): Promise<WorkersCacheLike | null> {
  */
 function toPurgeResult(result: unknown): PurgeResult {
   if (
-    typeof result === 'object' &&
+    typeof result === "object" &&
     result !== null &&
-    'success' in result &&
+    "success" in result &&
     (result as { success?: unknown }).success === false
   ) {
-    return { ok: false, reason: 'purge-failed', error: (result as { errors?: unknown }).errors }
+    return { ok: false, reason: "purge-failed", error: (result as { errors?: unknown }).errors };
   }
-  return { ok: true }
+  return { ok: true };
 }
 
 async function doPurge(
-  options: Parameters<WorkersCacheLike['purge']>[0],
+  options: Parameters<WorkersCacheLike["purge"]>[0],
   c?: Context,
 ): Promise<PurgeResult> {
-  const cache = await resolveCache(c)
-  if (!cache) return { ok: false, reason: 'cache-unavailable' }
+  const cache = await resolveCache(c);
+  if (!cache) return { ok: false, reason: "cache-unavailable" };
   try {
-    return toPurgeResult(await cache.purge(options))
+    return toPurgeResult(await cache.purge(options));
   } catch (error) {
-    return { ok: false, reason: 'purge-failed', error }
+    return { ok: false, reason: "purge-failed", error };
   }
 }
 
@@ -85,13 +85,13 @@ async function doPurge(
  * through `cloudflare:workers`).
  */
 export function revalidateTag(tags: string | string[], c?: Context): Promise<PurgeResult> {
-  const list = (Array.isArray(tags) ? tags : [tags]).filter((t) => t.length > 0)
-  if (list.length === 0) return Promise.resolve({ ok: true })
-  return doPurge({ tags: list }, c)
+  const list = (Array.isArray(tags) ? tags : [tags]).filter((t) => t.length > 0);
+  if (list.length === 0) return Promise.resolve({ ok: true });
+  return doPurge({ tags: list }, c);
 }
 
 /** How `revalidatePath` interprets its paths. Default (omitted) = exact path. */
-export type RevalidatePathType = 'route' | 'prefix'
+export type RevalidatePathType = "route" | "prefix";
 
 /**
  * Invalidate cached responses for a path — Next.js' `revalidatePath`, mapped
@@ -117,24 +117,24 @@ export type RevalidatePathType = 'route' | 'prefix'
  * The tag purges only affect entries cached *after* the middleware started
  * emitting the corresponding tag — mind this right after upgrading.
  */
-export function revalidatePath(paths: string | string[], c?: Context): Promise<PurgeResult>
+export function revalidatePath(paths: string | string[], c?: Context): Promise<PurgeResult>;
 export function revalidatePath(
   paths: string | string[],
   type: RevalidatePathType,
   c?: Context,
-): Promise<PurgeResult>
+): Promise<PurgeResult>;
 export function revalidatePath(
   paths: string | string[],
   typeOrContext?: RevalidatePathType | Context,
   context?: Context,
 ): Promise<PurgeResult> {
-  const type = typeof typeOrContext === 'string' ? typeOrContext : undefined
-  const c = typeof typeOrContext === 'string' ? context : typeOrContext
-  const list = (Array.isArray(paths) ? paths : [paths]).filter((p) => p.length > 0)
-  if (list.length === 0) return Promise.resolve({ ok: true })
-  if (type === 'prefix') return doPurge({ pathPrefixes: list }, c)
-  if (type === 'route') return doPurge({ tags: list.map((p) => `route:${p}`) }, c)
-  return doPurge({ tags: list.map((p) => `path:${normalizePath(p)}`) }, c)
+  const type = typeof typeOrContext === "string" ? typeOrContext : undefined;
+  const c = typeof typeOrContext === "string" ? context : typeOrContext;
+  const list = (Array.isArray(paths) ? paths : [paths]).filter((p) => p.length > 0);
+  if (list.length === 0) return Promise.resolve({ ok: true });
+  if (type === "prefix") return doPurge({ pathPrefixes: list }, c);
+  if (type === "route") return doPurge({ tags: list.map((p) => `route:${p}`) }, c);
+  return doPurge({ tags: list.map((p) => `path:${normalizePath(p)}`) }, c);
 }
 
 /**
@@ -142,5 +142,5 @@ export function revalidatePath(
  * Next.js' `revalidatePath('/', 'layout')`.
  */
 export function revalidateEverything(c?: Context): Promise<PurgeResult> {
-  return doPurge({ purgeEverything: true }, c)
+  return doPurge({ purgeEverything: true }, c);
 }

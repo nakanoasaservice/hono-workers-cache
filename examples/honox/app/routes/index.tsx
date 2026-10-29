@@ -1,7 +1,7 @@
-import { workersCache } from 'hono-workers-cache'
-import { createRoute } from 'honox/factory'
+import { workersCache } from "hono-workers-cache";
+import { createRoute } from "honox/factory";
 
-export default createRoute(workersCache('minutes'), (c) => {
+export default createRoute(workersCache("minutes"), (c) => {
   return c.render(
     <div>
       <h1>hono-workers-cache × HonoX</h1>
@@ -14,5 +14,5 @@ export default createRoute(workersCache('minutes'), (c) => {
         </li>
       </ul>
     </div>,
-  )
-})
+  );
+});

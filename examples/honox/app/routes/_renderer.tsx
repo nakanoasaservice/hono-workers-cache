@@ -1,4 +1,4 @@
-import { jsxRenderer } from 'hono/jsx-renderer'
+import { jsxRenderer } from "hono/jsx-renderer";
 
 export default jsxRenderer(({ children }) => {
   return (
@@ -9,5 +9,5 @@ export default jsxRenderer(({ children }) => {
       </head>
       <body>{children}</body>
     </html>
-  )
-})
+  );
+});

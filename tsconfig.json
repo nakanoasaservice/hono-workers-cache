@@ -12,12 +12,5 @@
     "verbatimModuleSyntax": true,
     "isolatedModules": true
   },
-  "include": [
-    "src",
-    "test",
-    "test-workerd",
-    "tsdown.config.ts",
-    "vitest.config.ts",
-    "vitest.workerd.config.ts"
-  ]
+  "include": ["src", "test", "vite.config.ts"]
 }

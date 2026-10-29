@@ -1,14 +1,14 @@
-import type { Context } from 'hono'
+import type { Context } from "hono";
 
 /** Built-in profile names — same names and values as Next.js `cacheLife()`. */
 export type CacheLifeProfile =
-  | 'default'
-  | 'seconds'
-  | 'minutes'
-  | 'hours'
-  | 'days'
-  | 'weeks'
-  | 'max'
+  | "default"
+  | "seconds"
+  | "minutes"
+  | "hours"
+  | "days"
+  | "weeks"
+  | "max";
 
 /**
  * A cache lifetime in the Next.js Cache Components vocabulary, mapped onto
@@ -27,15 +27,15 @@ export type CacheLifeProfile =
  */
 export interface CacheLife {
   /** Browser freshness window in seconds. `0` = revalidate with the edge every request. */
-  stale?: number
+  stale?: number;
   /** Edge freshness window in seconds; after this the edge serves stale while regenerating. */
-  revalidate?: number
+  revalidate?: number;
   /** Max total lifetime in seconds (or `'never'`); after this the edge fetches fresh. */
-  expire?: number | 'never'
+  expire?: number | "never";
 }
 
 /** A `CacheLife` with every field filled in (profile defaults applied). */
-export type ResolvedCacheLife = Required<CacheLife>
+export type ResolvedCacheLife = Required<CacheLife>;
 
 /** Options shared by both `workersCache()` variants. */
 interface WorkersCacheSharedOptions {
@@ -43,19 +43,19 @@ interface WorkersCacheSharedOptions {
    * Tags to emit in `Cache-Tag`. Pass a function to evaluate per request
    * (e.g. tags derived from path parameters).
    */
-  tags?: string[] | ((c: Context) => string[])
+  tags?: string[] | ((c: Context) => string[]);
   /**
    * Automatically add a `route:/blog/:id`-style tag derived from the matched
    * route pattern, enabling `revalidatePath('/blog/:id', 'route')`.
    * Default: true
    */
-  routeTag?: boolean
+  routeTag?: boolean;
   /**
    * Automatically add a `path:/blog/123`-style tag with the concrete request
    * path (query string excluded, trailing slash normalized), enabling
    * exact-path purges via `revalidatePath('/blog/123')`. Default: true
    */
-  pathTag?: boolean
+  pathTag?: boolean;
 }
 
 /** Declare the policy as a cache lifetime (profile and/or explicit fields). */
@@ -66,10 +66,10 @@ export interface WorkersCacheLifeOptions extends WorkersCacheSharedOptions, Cach
    * `{ profile: 'days', stale: 0 }` = daily content with instant purges.
    * Default: 'default' (stale 5 min / revalidate 15 min / expire never).
    */
-  profile?: CacheLifeProfile
+  profile?: CacheLifeProfile;
   /** stale-if-error window in seconds. Serves stale content when the origin returns 5xx. */
-  staleIfError?: number
-  cacheControl?: never
+  staleIfError?: number;
+  cacheControl?: never;
 }
 
 /**
@@ -85,29 +85,29 @@ export interface WorkersCacheControlOptions extends WorkersCacheSharedOptions {
    * Note: Cloudflare treats a value-less `stale-while-revalidate` as a
    * zero-width window (RFC 5861) — always spell out the seconds.
    */
-  cacheControl: string
-  profile?: never
-  stale?: never
-  revalidate?: never
-  expire?: never
-  staleIfError?: never
+  cacheControl: string;
+  profile?: never;
+  stale?: never;
+  revalidate?: never;
+  expire?: never;
+  staleIfError?: never;
 }
 
-export type WorkersCacheOptions = WorkersCacheLifeOptions | WorkersCacheControlOptions
+export type WorkersCacheOptions = WorkersCacheLifeOptions | WorkersCacheControlOptions;
 
 /** The purge surface of `ctx.cache` / `cloudflare:workers`' cache (for duck typing). */
 export interface WorkersCacheLike {
   purge(options: {
-    tags?: string[]
-    pathPrefixes?: string[]
-    purgeEverything?: boolean
-  }): Promise<unknown>
+    tags?: string[];
+    pathPrefixes?: string[];
+    purgeEverything?: boolean;
+  }): Promise<unknown>;
 }
 
 export interface PurgeResult {
   /** Whether the purge was executed. False when the runtime has no Workers Cache (e.g. dev). */
-  ok: boolean
+  ok: boolean;
   /** Why ok is false. */
-  reason?: 'cache-unavailable' | 'purge-failed'
-  error?: unknown
+  reason?: "cache-unavailable" | "purge-failed";
+  error?: unknown;
 }

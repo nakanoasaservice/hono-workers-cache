@@ -6,6 +6,6 @@
   // Enable Workers Cache (requires Wrangler >= 4.69.0). On a HIT the edge
   // serves the response before this Worker — including HonoX — ever runs.
   "cache": {
-    "enabled": true
-  }
+    "enabled": true,
+  },
 }

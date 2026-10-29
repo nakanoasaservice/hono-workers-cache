@@ -7,6 +7,6 @@
   // Cloudflare checks the cache BEFORE your Worker runs — on a HIT this code
   // never executes.
   "cache": {
-    "enabled": true
-  }
+    "enabled": true,
+  },
 }
