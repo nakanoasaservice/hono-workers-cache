@@ -6,7 +6,9 @@ export default defineConfig({
   },
   fmt: {},
   lint: {
-    ignorePatterns: ["dist/**", "examples/**/dist/**", "**/.wrangler/**"],
+    // Examples resolve the workspace package via dist/; keep them out of the
+    // root type-aware check (same scope as the old root `tsc --noEmit`).
+    ignorePatterns: ["dist/**", "examples/**", "**/.wrangler/**"],
     jsPlugins: [{ name: "vite-plus", specifier: "vite-plus/oxlint-plugin" }],
     rules: { "vite-plus/prefer-vite-plus-imports": "error" },
     options: { typeAware: true, typeCheck: true },
