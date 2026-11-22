@@ -16,7 +16,7 @@
 ## Dependency updates
 
 - Dependabot opens update PRs (`.github/dependabot.yml`). `.github/workflows/dependabot-triage.yml` enables auto-merge for patch/minor updates on versions >= 1.0; GitHub merges them once the required CI check passes.
-- Not managed by Dependabot: the Vite+ toolchain. `vite-plus` and the Vite core alias are pinned in the `pnpm-workspace.yaml` catalog; Vitest is bundled with Vite+. Update them together with `vp migrate`, refresh the lockfile, and keep the `setup-vp` CI version in sync.
+- Not managed by Dependabot: the Vite+ toolchain. `vite-plus` and the Vite core alias are pinned in the `pnpm-workspace.yaml` catalog; Vitest is bundled with Vite+. Update them together with `vp migrate` and refresh the lockfile. CI resolves the Vite+ version from the catalog automatically.
 
 ## Releases
 
