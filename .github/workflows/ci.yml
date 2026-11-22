@@ -20,8 +20,6 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
           cache: true
-          run-install: false
-      - run: pnpm install --frozen-lockfile
       - name: Verify compatibility-test runtime
         run: pnpm exec node -e 'const expected = "${{ matrix.node-version }}"; if (process.versions.node.split(".")[0] !== expected) throw new Error(`Expected Node ${expected}, got ${process.version}`)'
       - run: pnpm check

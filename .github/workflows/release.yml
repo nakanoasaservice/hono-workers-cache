@@ -23,11 +23,7 @@ jobs:
         uses: voidzero-dev/setup-vp@v1.22.0
         with:
           cache: true
-          run-install: false
           registry-url: https://registry.npmjs.org
-
-      - name: Install Dependencies
-        run: pnpm install --frozen-lockfile
 
       - name: Publish to npm
         run: |
