@@ -227,7 +227,7 @@ importers:
         version: link:../..
       honox:
         specifier: ^0.1.44
-        version: 0.1.62(hono@4.13.19)(miniflare@4.20260710.0)(supports-color@10.2.2)(wrangler@4.163.0)
+        version: 0.1.63(hono@4.13.19)(miniflare@4.20260710.0)(supports-color@10.2.2)(wrangler@4.163.0)
     devDependencies:
       '@hono/vite-build':
         specifier: ^1.7.1
@@ -1825,8 +1825,8 @@ packages:
     resolution: {integrity: sha512-KmXvQAXwcAHV+muzbIwoJ23niEB5nMoDVr9WcRkU8mvjUECm/1+7v4Jgp7P7a+H6MLFrh+vXrGonGrGS+RQfkA==}
     engines: {node: '>=16.9.0'}
 
-  honox@0.1.62:
-    resolution: {integrity: sha512-fPvoP9MhjMA38gM+NhfOZTFOcxMeI764l+k5o79gETOcpobzkSLrPZnx2JlVLAbaj0LuUrMjcN5Lh3acAEgCUg==}
+  honox@0.1.63:
+    resolution: {integrity: sha512-lWxCkD5f6/FvrNkRPvNXU0uYxGrnnYGMd8jo3TWkbexmOh7ugKTxt94r4A3mDZEQpqm+AIQxOLBbRS5NBPzFLg==}
     engines: {node: '>=18.14.1'}
     peerDependencies:
       hono: '>=4.* || ^5.0.0-0'
@@ -3364,7 +3364,7 @@ snapshots:
 
   hono@4.13.19: {}
 
-  honox@0.1.62(hono@4.13.19)(miniflare@4.20260710.0)(supports-color@10.2.2)(wrangler@4.163.0):
+  honox@0.1.63(hono@4.13.19)(miniflare@4.20260710.0)(supports-color@10.2.2)(wrangler@4.163.0):
     dependencies:
       '@babel/generator': 7.29.1
       '@babel/parser': 7.29.3
