@@ -19,16 +19,12 @@ jobs:
           ref: main
           fetch-depth: 0
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v6
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1.22.0
         with:
-          run_install: false
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: pnpm
+          version: "1.7.0"
+          cache: true
+          run-install: false
           registry-url: https://registry.npmjs.org
 
       - name: Install Dependencies

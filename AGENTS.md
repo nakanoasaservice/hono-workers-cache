@@ -2,6 +2,8 @@
 
 ## Toolchain
 
+- Development Node.js is pinned only in `package.json#devEngines.runtime`. `mise.toml` provides bootstrap majors; use the global Vite+ CLI with environment management enabled for exact runtime selection. Compatibility CI may override the development pin.
+
 - Node 22 or 24 (CI tests both; see `engines`) and pnpm (version from `packageManager` in `package.json`). Vite+ (`vp`) provides check, test and pack.
 - Verify with `pnpm install --frozen-lockfile`, `pnpm check`, `pnpm test`, `pnpm build`. CI runs the same (`.github/workflows/ci.yml`, job `check` on Node 22 and 24).
 - pnpm workspace: the library at the root plus `examples/*`, sharing the root `pnpm-lock.yaml`.
