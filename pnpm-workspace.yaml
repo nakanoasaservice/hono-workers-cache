@@ -17,7 +17,5 @@ allowBuilds:
   workerd: true
   sharp: true
 
-pmOnFail: download
-
 # Vite+ selects Node from package.json; do not let pnpm override CI matrices.
 runtimeOnFail: ignore
