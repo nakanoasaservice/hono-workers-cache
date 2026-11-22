@@ -2,6 +2,8 @@
 
 ## Toolchain
 
+- Development Node.js is pinned only in `package.json#devEngines.runtime`. `mise.toml` provides bootstrap majors; use the global Vite+ CLI with environment management enabled for exact runtime selection. Compatibility CI may override the development pin.
+
 - Node 22 or 24 (CI tests both; see `engines`) and pnpm (version from `packageManager` in `package.json`). Vite+ (`vp`) provides check, test and pack.
 - Verify with `pnpm install --frozen-lockfile`, `pnpm check`, `pnpm test`, `pnpm build`. CI runs the same (`.github/workflows/ci.yml`, job `check` on Node 22 and 24).
 - pnpm workspace: the library at the root plus `examples/*`, sharing the root `pnpm-lock.yaml`.
@@ -14,7 +16,7 @@
 ## Dependency updates
 
 - Dependabot opens update PRs (`.github/dependabot.yml`). `.github/workflows/dependabot-triage.yml` enables auto-merge for patch/minor updates on versions >= 1.0; GitHub merges them once the required CI check passes.
-- Not managed by Dependabot: `vite`, `vite-plus`, `vitest`. They come from the `catalog` in `pnpm-workspace.yaml` (`vite` is an npm alias for `@voidzero-dev/vite-plus-core`), and `vite`/`vitest` are forced via `overrides`. Update all three together in the catalog, keeping them on matching Vite+ releases, then refresh the lockfile.
+- Not managed by Dependabot: the Vite+ toolchain. `vite-plus` and the Vite core alias are pinned in the `pnpm-workspace.yaml` catalog; Vitest is bundled with Vite+. Update them together with `vp migrate` and refresh the lockfile. CI resolves the Vite+ version from the catalog automatically.
 
 ## Releases
 
