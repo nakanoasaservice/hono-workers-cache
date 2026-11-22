@@ -15,7 +15,7 @@ jobs:
       matrix:
         node-version: [22, 24]
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
       - uses: voidzero-dev/setup-vp@v1.22.0
         with:
           node-version: ${{ matrix.node-version }}
